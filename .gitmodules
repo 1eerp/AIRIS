@@ -1,0 +1,3 @@
+[submodule "ED/spdlog"]
+	path = ED/spdlog
+	url = https://github.com/1eerp/spdlog.git
