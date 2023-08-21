@@ -31,7 +31,7 @@ bool SWindow::Show()
     return ShowWindow(m_hWnd, m_windowProperties.StartProps.ShowCommand); 
 }
 
-int SWindow::PollEvents()
+int SWindow::PumpMessages()
 {
     MSG msg = { 0 };
     while(PeekMessage(&msg, 0, 0, 0, PM_REMOVE))

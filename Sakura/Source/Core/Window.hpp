@@ -34,6 +34,7 @@ public:
 	inline WindowProps		GetWindowProperties()	{ return m_windowProperties; };
 	inline uint32_t			GetHeight()				{ return m_windowProperties.Height; }
 	inline uint32_t			GetWidth()				{ return m_windowProperties.Width; }
+	inline float			GetAspectRatio()		{ return (float)m_windowProperties.Width / m_windowProperties.Height; }
 	inline bool				IsMinimized()			{ return m_minimized; }
 	inline bool				IsMaximized()			{ return m_maximized; }
 	inline bool				IsResizing()			{ return m_resizing; }
@@ -49,7 +50,7 @@ public:
 
 
 	bool					Show();
-	int						PollEvents();
+	int						PumpMessages();
 
 	static SWindow*			GetInstance()			{ return s_mainWindowInstance; }
 protected:
