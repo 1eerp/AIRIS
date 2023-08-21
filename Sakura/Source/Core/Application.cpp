@@ -8,9 +8,8 @@
 
 SApp* SApp::s_appInstance;
 
-#define BIND_EVENTCALLBACK(x) std::bind(&x, this, std::placeholders::_1)
 SApp::SApp(SWindow* mainWindow)
-	:m_mainWindow(mainWindow)
+	:m_mainWindow(mainWindow), m_renderer(mainWindow->GetWidth(), mainWindow->GetHeight())
 {
 	assert(!s_appInstance && "Attempted to instantiate multiple application!");
 	s_appInstance = this;
@@ -45,17 +44,18 @@ void SApp::Run()
 {
 	// Show the window now that the initialization is complete
 	m_mainWindow->Show();
+
 	// MAIN LOOP
 	while (m_running)
 	{
 		Update();
-
 	}
 }
 
 void SApp::Update()
 {
-	m_mainWindow->PollEvents();
+	m_mainWindow->PumpMessages();
 	EventSystem::GetGInstance()->ProcessEvents();
+	m_renderer.Draw();
 }
 

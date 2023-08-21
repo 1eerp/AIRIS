@@ -3,6 +3,7 @@
 #include <Windows.h>
 #include "Events/IEventListener.hpp"
 #include "Window.hpp"
+#include "Graphics/Renderer.hpp"
 
 
 
@@ -28,6 +29,7 @@ public:
 
 private:
 	// The main window associated with this application
+	RRenderer m_renderer;
 	SWindow* m_mainWindow;
 	static SApp* s_appInstance;
 };
