@@ -84,7 +84,7 @@ LRESULT CALLBACK SWindow::WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPA
     messageNum++;
 
     // Window Event info
-    //CORE_INFO("Message #{}: {}", messageNum, mm(message, wParam, lParam));
+    //CORE_TRACE("Message #{}: {}", messageNum, mm(message, wParam, lParam));
 
 #endif
 

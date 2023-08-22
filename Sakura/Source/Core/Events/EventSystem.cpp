@@ -51,7 +51,7 @@ void EventSystem::ProcessEvents()
 	if (eventQueue.size() == 0)
 		return;
 
-	CORE_INFO("Processing {} events", eventQueue.size());
+	CORE_TRACE("Processing {} events", eventQueue.size());
 	// Dispatch all recorded events
 	for (EventRef& e : eventQueue)
 		DispatchEvent(e);
@@ -65,7 +65,7 @@ void EventSystem::DispatchEvent(EventRef e)
 	// Dispatch the event to all the registered callback in the order the listeners were registers
 
 
-	CORE_INFO(e->ToString());
+	CORE_TRACE(e->ToString());
 	for (LCPair l : eventListeners[static_cast<int>(e->GetEventType())])
 	{
 		// If event is handled break;
