@@ -1,7 +1,7 @@
 #include "Renderer.hpp"
 #include "Core/Log.hpp"
 #include "Core/Events/EventSystem.hpp"
-
+#include "Core/Events/ApplicationEvents.hpp"
 
 ComPtr<ID3DBlob> SCompileShader(const std::wstring& filename, const D3D_SHADER_MACRO* defines, const std::string& entrypoint, const std::string& target);
 
@@ -24,7 +24,76 @@ RRenderer::~RRenderer()
 		FlushCommandQueue();
 }
 
+void RRenderer::Update()
+{
+}
 
+void RRenderer::Draw()
+{
+	D3D12_CPU_DESCRIPTOR_HANDLE rtv = CurrentBackBufferView(),
+								dsv = m_dsvHeap->GetCPUDescriptorHandleForHeapStart(),
+								uav = m_srvHeap->GetCPUDescriptorHandleForHeapStart();
+
+	ThrowIfFailed(m_cmdAlloc->Reset());
+	ThrowIfFailed(m_cmdList->Reset(m_cmdAlloc.Get(), m_computePSO.Get()));
+
+	D3D12_RESOURCE_BARRIER bs[2];
+	bs[0] = CD3DX12_RESOURCE_BARRIER::Transition(m_swapChainBuffers[m_curBackBuffer].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_COPY_DEST);
+	bs[1] = CD3DX12_RESOURCE_BARRIER::Transition(m_computeOutputBuffer.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+	// Set Viewport
+	m_cmdList->RSSetViewports(1, &m_viewport);
+	m_cmdList->RSSetScissorRects(1, &m_scissorRect);
+
+	// Transition Resources
+	m_cmdList->ResourceBarrier(2, bs);
+
+	// Initial Graphics stuff
+	const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
+	m_cmdList->SetComputeRootSignature(m_computeRootSig.Get());
+
+	ComPtr<ID3D12DescriptorHeap> heaps[1] = {m_srvHeap};
+	m_cmdList->SetDescriptorHeaps(1, heaps->GetAddressOf());
+
+	// Dispatch compute shader
+	m_cmdList->SetComputeRootDescriptorTable(0, m_srvHeap->GetGPUDescriptorHandleForHeapStart());
+	unsigned int xGroups = static_cast<unsigned int>(ceilf(m_clientWidth / 256.0f));
+	
+	m_cmdList->Dispatch(xGroups, m_clientHeight, 1);
+
+	// Ready output texture as copy source and backbuffer from copy dest to present state (the transitions will take place, respectively and sequentially, before and after the resource has been copied)
+	bs[0] = CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT);
+	bs[1] = CD3DX12_RESOURCE_BARRIER::Transition(m_computeOutputBuffer.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
+
+	// Transition 
+	m_cmdList->ResourceBarrier(1, &bs[1]);
+	// Copy 
+	m_cmdList->CopyResource(m_swapChainBuffers[m_curBackBuffer].Get(), m_computeOutputBuffer.Get());
+	m_cmdList->ResourceBarrier(1, &bs[0]);
+
+	// Done recording commands.
+	ThrowIfFailed(m_cmdList->Close());
+
+	// Add the command list to the queue for execution.
+	ID3D12CommandList* cmdsLists[] = { m_cmdList.Get() };
+	m_cmdQueue->ExecuteCommandLists(_countof(cmdsLists), cmdsLists);
+
+	// swap the back and front buffers
+	ThrowIfFailed(m_swapChain->Present(0, 0));
+	m_curBackBuffer = (m_curBackBuffer + 1) % m_config.SwapChainBufferCount;
+
+	FlushCommandQueue();
+}
+
+bool RRenderer::OnWindowResize(IEvent* e)
+{
+	WindowResizeEvent* event = dynamic_cast<WindowResizeEvent*>(e);
+	m_clientWidth = event->GetWidth(), m_clientHeight = event->GetHeight();
+	unsigned int xGroups = static_cast<unsigned int>(ceilf(m_clientWidth / 256.0f));
+	CORE_INFO("Resizing Buffers, Width: {}, Height: {}, X Dispatch Groups(256 warp size):{}", m_clientWidth, m_clientWidth, xGroups);
+	ResizeBuffers(m_clientWidth, m_clientHeight);
+	return false;
+}
 
 void RRenderer::Init()
 {
@@ -72,7 +141,7 @@ void RRenderer::Init()
 	m_cmdList->Reset(m_cmdAlloc.Get(), nullptr);
 	CreateMesh();
 	CreateInputLayoutAndShaders();
-	CreateRootSignatureAndPSO();
+	CreateRootSignatureAndPSOs();
 	m_cmdList->Close();
 
 	ID3D12CommandList* cmdLists[] = { m_cmdList.Get() };
@@ -82,6 +151,7 @@ void RRenderer::Init()
 	FlushCommandQueue();
 
 }
+
 
 void RRenderer::CreateCommandObjects()
 {
@@ -114,15 +184,20 @@ void RRenderer::CreateSwapChain()
 
 void RRenderer::CreateDescriptorHeaps()
 {
-	D3D12_DESCRIPTOR_HEAP_DESC rtvDesc = {}, dsvDesc = {};
+	D3D12_DESCRIPTOR_HEAP_DESC rtvDesc = {}, dsvDesc = {}, srvDesc{};
 	rtvDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
 	rtvDesc.NumDescriptors = m_config.SwapChainBufferCount;
 
 	dsvDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
 	dsvDesc.NumDescriptors = 1;
 
+	srvDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+	srvDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+	srvDesc.NumDescriptors = 1;
+
 	ThrowIfFailed(m_device->CreateDescriptorHeap(&rtvDesc, IID_PPV_ARGS(&m_rtvHeap)));
 	ThrowIfFailed(m_device->CreateDescriptorHeap(&dsvDesc, IID_PPV_ARGS(&m_dsvHeap)));
+	ThrowIfFailed(m_device->CreateDescriptorHeap(&srvDesc, IID_PPV_ARGS(&m_srvHeap)));
 }
 
 void RRenderer::CreateInputLayoutAndShaders()
@@ -131,12 +206,13 @@ void RRenderer::CreateInputLayoutAndShaders()
 
 	m_vsByteCode = SCompileShader(L"Assets\\Shaders\\color.hlsl", nullptr, "VS", "vs_5_0");
 	m_psByteCode = SCompileShader(L"Assets\\Shaders\\color.hlsl", nullptr, "PS", "ps_5_0");
+	m_csByteCode = SCompileShader(L"Assets\\Shaders\\rtiaw.hlsl", nullptr, "CS", "cs_5_0");
+
 
 	m_inputLayout =
 	{
 		{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
 		{"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-		
 	};
 }
 
@@ -165,8 +241,9 @@ void RRenderer::CreateMesh()
 	m_mesh->m_subMeshes["Triangle"] = sm;
 }
 
-void RRenderer::CreateRootSignatureAndPSO()
+void RRenderer::CreateRootSignatureAndPSOs()
 {
+	// ROOT SIGNATURE
 	D3D12_ROOT_SIGNATURE_DESC rootDesc= {};
 	rootDesc.NumParameters = 0;
 	rootDesc.pParameters = nullptr;
@@ -183,11 +260,35 @@ void RRenderer::CreateRootSignatureAndPSO()
 	}
 
 	ThrowIfFailed(hr);
-	ThrowIfFailed(m_device->CreateRootSignature(NULL, rootSerializerBlob->GetBufferPointer(), rootSerializerBlob->GetBufferSize(), IID_PPV_ARGS(&m_rootSignature)));
+	ThrowIfFailed(m_device->CreateRootSignature(NULL, rootSerializerBlob->GetBufferPointer(), rootSerializerBlob->GetBufferSize(), IID_PPV_ARGS(&m_opaqueRootSig)));
 
+	// Compute Shader root signature
+	CD3DX12_DESCRIPTOR_RANGE table{};
+	table.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
+	CD3DX12_ROOT_PARAMETER params[1];
+	params[0].InitAsDescriptorTable(1, &table);
+	CD3DX12_ROOT_SIGNATURE_DESC crDesc(1, params, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+
+	rootSerializerBlob = nullptr,
+	errorBlob = nullptr;
+	hr = D3D12SerializeRootSignature(&crDesc, D3D_ROOT_SIGNATURE_VERSION_1, rootSerializerBlob.GetAddressOf(), errorBlob.GetAddressOf());
+	if (errorBlob != nullptr)
+	{
+		::OutputDebugStringA((char*)errorBlob->GetBufferPointer());
+	}
+
+	ThrowIfFailed(hr);
+	ThrowIfFailed(m_device->CreateRootSignature(NULL, rootSerializerBlob->GetBufferPointer(), rootSerializerBlob->GetBufferSize(), IID_PPV_ARGS(&m_computeRootSig)));
+	
+
+
+
+
+
+	// PSOs
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = { };
 	psoDesc.InputLayout = { m_inputLayout.data(), (uint32_t)m_inputLayout.size() };
-	psoDesc.pRootSignature = m_rootSignature.Get();
+	psoDesc.pRootSignature = m_opaqueRootSig.Get();
 	psoDesc.VS =
 	{
 		reinterpret_cast<BYTE*>(m_vsByteCode->GetBufferPointer()),
@@ -208,12 +309,24 @@ void RRenderer::CreateRootSignatureAndPSO()
 	psoDesc.SampleDesc.Count = 1;
 	psoDesc.SampleDesc.Quality = 0;
 	psoDesc.DSVFormat = m_config.DepthStencilFormat;
-	ThrowIfFailed(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_PSO)));
-	m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_PSO));
+	ThrowIfFailed(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_opaquePSO)));
+
+
+	D3D12_COMPUTE_PIPELINE_STATE_DESC cmptDesc{};
+	cmptDesc.CS =
+	{
+		reinterpret_cast<BYTE*>(m_csByteCode->GetBufferPointer()),
+		m_csByteCode->GetBufferSize()
+	};
+	cmptDesc.pRootSignature = m_computeRootSig.Get();
+	ThrowIfFailed(m_device->CreateComputePipelineState(&cmptDesc, IID_PPV_ARGS(&m_computePSO)));
+
+	cmptDesc.Flags = D3D12_PIPELINE_STATE_FLAG_TOOL_DEBUG;
+	cmptDesc.pRootSignature = m_computeRootSig.Get();
 
 }
 
-void RRenderer::ResizeBuffers(unsigned short width, unsigned short height)
+void RRenderer::ResizeBuffers(uint16_t width, uint16_t height)
 {
 	assert(m_device);
 	assert(m_swapChain);
@@ -226,8 +339,9 @@ void RRenderer::ResizeBuffers(unsigned short width, unsigned short height)
 
 	// Release the previous resources we will be recreating.
 	for (unsigned int i = 0; i < m_config.SwapChainBufferCount; ++i)
-		m_swapChainBuffer[i].Reset();
+		m_swapChainBuffers[i].Reset();
 	m_depthStencilBuffer.Reset();
+	m_computeOutputBuffer.Reset();
 
 	// Resize the swap chain.
 	ThrowIfFailed(m_swapChain->ResizeBuffers(
@@ -238,16 +352,16 @@ void RRenderer::ResizeBuffers(unsigned short width, unsigned short height)
 
 	m_curBackBuffer = 0;
 
-	CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHeapHandle(m_rtvHeap->GetCPUDescriptorHandleForHeapStart());
+	CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHeapHandle(m_rtvHeap->GetCPUDescriptorHandleForHeapStart()); 
 	for (UINT i = 0; i < m_config.SwapChainBufferCount; i++)
 	{
-		ThrowIfFailed(m_swapChain->GetBuffer(i, IID_PPV_ARGS(&m_swapChainBuffer[i])));
-		m_device->CreateRenderTargetView(m_swapChainBuffer[i].Get(), nullptr, rtvHeapHandle);
+		ThrowIfFailed(m_swapChain->GetBuffer(i, IID_PPV_ARGS(&m_swapChainBuffers[i])));
+		m_device->CreateRenderTargetView(m_swapChainBuffers[i].Get(), nullptr, rtvHeapHandle);
 		rtvHeapHandle.Offset(1, m_info.DescSizes.RTV);
 	}
 
 	// Create the depth/stencil buffer and view.
-	D3D12_RESOURCE_DESC depthStencilDesc;
+	D3D12_RESOURCE_DESC depthStencilDesc{};
 	depthStencilDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
 	depthStencilDesc.Alignment = 0;
 	depthStencilDesc.Width = width;
@@ -260,19 +374,19 @@ void RRenderer::ResizeBuffers(unsigned short width, unsigned short height)
 	depthStencilDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
 	depthStencilDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
 
-	D3D12_CLEAR_VALUE optClear;
+	D3D12_CLEAR_VALUE optClear{};
 	optClear.Format = m_config.DepthStencilFormat;
 	optClear.DepthStencil.Depth = 1.0f;
 	optClear.DepthStencil.Stencil = 0;
 
-	D3D12_HEAP_PROPERTIES bufferProps{};
-	bufferProps.Type = D3D12_HEAP_TYPE_DEFAULT;
-	bufferProps.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-	bufferProps.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-	bufferProps.CreationNodeMask = 1;
-	bufferProps.VisibleNodeMask = 1;
+	D3D12_HEAP_PROPERTIES textureProps{};
+	textureProps.Type = D3D12_HEAP_TYPE_DEFAULT;
+	textureProps.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+	textureProps.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+	textureProps.CreationNodeMask = 1;
+	textureProps.VisibleNodeMask = 1;
 	ThrowIfFailed(m_device->CreateCommittedResource(
-		&bufferProps,
+		&textureProps,
 		D3D12_HEAP_FLAG_NONE,
 		&depthStencilDesc,
 		D3D12_RESOURCE_STATE_COMMON,
@@ -297,6 +411,33 @@ void RRenderer::ResizeBuffers(unsigned short width, unsigned short height)
 	b.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
 
 	m_cmdList->ResourceBarrier(1, &b);
+
+
+	// COMPUTE STUFF
+	D3D12_RESOURCE_DESC rtOutputDesc{};
+	rtOutputDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+	rtOutputDesc.Alignment = 0;
+	rtOutputDesc.Width = width;
+	rtOutputDesc.Height = height;
+	rtOutputDesc.DepthOrArraySize = 1;
+	rtOutputDesc.MipLevels = 1;
+	rtOutputDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	rtOutputDesc.SampleDesc.Count = 1;
+	rtOutputDesc.SampleDesc.Quality = 0;
+	rtOutputDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+	rtOutputDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
+	ThrowIfFailed(m_device->CreateCommittedResource(&textureProps, D3D12_HEAP_FLAG_NONE, &rtOutputDesc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(m_computeOutputBuffer.GetAddressOf())));
+
+	// Create descriptor to the texture
+	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{};
+	uavDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+	uavDesc.Texture2D.MipSlice = 0;
+	m_device->CreateUnorderedAccessView(m_computeOutputBuffer.Get(), nullptr, &uavDesc, m_srvHeap->GetCPUDescriptorHandleForHeapStart());
+
+	D3D12_RESOURCE_BARRIER uavBar = CD3DX12_RESOURCE_BARRIER::Transition(m_computeOutputBuffer.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_SOURCE);
+	m_cmdList->ResourceBarrier(1, &uavBar);
 
 	// Execute the resize commands.
 	m_cmdList->Close();
@@ -341,6 +482,11 @@ void RRenderer::FlushCommandQueue()
 	}
 }
 
+ID3D12Resource* RRenderer::CurrentBackBuffer() const
+{
+	return m_swapChainBuffers[m_curBackBuffer].Get();
+}
+
 D3D12_CPU_DESCRIPTOR_HANDLE RRenderer::CurrentBackBufferView() const
 {
 	return CD3DX12_CPU_DESCRIPTOR_HANDLE(
@@ -354,60 +500,9 @@ D3D12_CPU_DESCRIPTOR_HANDLE RRenderer::DepthStencilView() const
 	return m_dsvHeap->GetCPUDescriptorHandleForHeapStart();
 }
 
-void RRenderer::Draw()
+D3D12_CPU_DESCRIPTOR_HANDLE RRenderer::ComputeTextureUAView() const
 {
-	D3D12_CPU_DESCRIPTOR_HANDLE rtv = CurrentBackBufferView();
-	D3D12_CPU_DESCRIPTOR_HANDLE dsv = m_dsvHeap->GetCPUDescriptorHandleForHeapStart();
-
-	ThrowIfFailed(m_cmdAlloc->Reset());
-	ThrowIfFailed(m_cmdList->Reset(m_cmdAlloc.Get(), m_PSO.Get()));
-
-	m_cmdList->RSSetViewports(1, &m_viewport);
-	m_cmdList->RSSetScissorRects(1, &m_scissorRect);
-	D3D12_RESOURCE_BARRIER b = CD3DX12_RESOURCE_BARRIER::Transition(m_swapChainBuffer[m_curBackBuffer].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-	m_cmdList->ResourceBarrier(1, &b);
-	const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
-	m_cmdList->ClearRenderTargetView(rtv, clearColor, 0, nullptr);
-	m_cmdList->ClearDepthStencilView(m_dsvHeap->GetCPUDescriptorHandleForHeapStart(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
-	m_cmdList->OMSetRenderTargets(1, &rtv, true, &dsv);
-	m_cmdList->SetGraphicsRootSignature(m_rootSignature.Get());
-
-	D3D12_VERTEX_BUFFER_VIEW views[1] = { m_mesh->VertexBufferView() };
-	m_cmdList->IASetVertexBuffers(0, 1, views);
-	auto ibv = m_mesh->IndexBufferView();
-	m_cmdList->IASetIndexBuffer(&ibv);
-	m_cmdList->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-	auto& m = m_mesh->m_subMeshes["Triangle"];
-	m_cmdList->DrawIndexedInstanced(m.IndexCount, 1, m.StartIndexLocation, m.BaseVertexLocation, 0);
-	D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_swapChainBuffer[m_curBackBuffer].Get(),
-		D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
-	m_cmdList->ResourceBarrier(1, &barrier);
-
-	// Done recording commands.
-	ThrowIfFailed(m_cmdList->Close());
-
-	// Add the command list to the queue for execution.
-	ID3D12CommandList* cmdsLists[] = { m_cmdList.Get() };
-	m_cmdQueue->ExecuteCommandLists(_countof(cmdsLists), cmdsLists);
-
-	// swap the back and front buffers
-	ThrowIfFailed(m_swapChain->Present(0, 0));
-	m_curBackBuffer = (m_curBackBuffer + 1) % m_config.SwapChainBufferCount;
-
-	FlushCommandQueue();
-}
-
-void RRenderer::Update()
-{
-}
-
-#include "Core/Events/ApplicationEvents.hpp"
-bool RRenderer::OnWindowResize(IEvent* e)
-{
-	WindowResizeEvent* event = dynamic_cast<WindowResizeEvent*>(e);
-	ResizeBuffers(event->GetWidth(), event->GetHeight());
-	return false;
+	return m_dsvHeap->GetCPUDescriptorHandleForHeapStart();
 }
 
 
