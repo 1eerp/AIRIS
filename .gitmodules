@@ -1,3 +1,6 @@
 [submodule "ED/spdlog"]
 	path = ED/spdlog
 	url = https://github.com/1eerp/spdlog.git
+[submodule "ED/glm"]
+	path = ED/glm
+	url = https://github.com/1eerp/glm.git
