@@ -4,6 +4,8 @@
 #include "Core/Window.hpp"
 #include "Core/API/RendererAPI.hpp"
 #include "Mesh.hpp"
+#include "Camera.hpp"
+#include "RTShapes.hpp"
 using Microsoft::WRL::ComPtr;
 
 
@@ -19,6 +21,15 @@ private:
 	virtual void Init() = 0;
 };
 
+struct RTConstants
+{
+	// Booleans are 32BIT(4 Bytes) in HLSL 
+	uint32_t	AccumlateSamples	= false, // bool
+				ResetOutput			= false, // bool
+				AccumulatedSamples	= 0,
+				MaxRayBounces		= 7,
+				RandSeed			= 0;
+};
 
 class RRenderer : public Renderer
 {
@@ -30,15 +41,17 @@ public:
 	virtual void Draw() override;
 
 	virtual bool OnWindowResize(IEvent*) override;
+	virtual bool OnKeyDown(IEvent*) override;
 
 private:
 	virtual void Init() override;
 	void CreateCommandObjects();
 	void CreateSwapChain();
 	void CreateDescriptorHeaps();
-	void CreateMesh();
+	void CreateObjects();
 	void CreateInputLayoutAndShaders();
 	void CreateRootSignatureAndPSOs();
+	void CreateConstantBuffers();
 	void ResizeBuffers(uint16_t width, uint16_t height);
 	void FlushCommandQueue();
 	ID3D12Resource* CurrentBackBuffer() const;
@@ -64,7 +77,13 @@ private:
 	uint8_t									m_curBackBuffer = 0;
 	std::vector<ComPtr<ID3D12Resource>>		m_swapChainBuffers = std::vector<ComPtr<ID3D12Resource>>(DEFAULT_SWAPCHAINBUFFERCOUNT);
 	ComPtr<ID3D12Resource>					m_depthStencilBuffer,
-											m_computeOutputBuffer;
+											m_computeOutputBuffer,
+											m_computeAccumulateBuffer,
+											m_sphereBuffer,
+											m_sphereUploadBuffer;
+
+	Scope<UploadBuffer<RTConstants>>		m_rtConstantBuffer;
+	Scope<UploadBuffer<RTCameraSD>>			m_cameraConstantBuffer;
 
 	ComPtr<ID3D12DescriptorHeap>			m_rtvHeap,
 											m_dsvHeap,
@@ -76,7 +95,7 @@ private:
 	ComPtr<ID3DBlob>						m_psByteCode = nullptr;
 	ComPtr<ID3DBlob>						m_csByteCode = nullptr;
 
-	// ROOT SIGN, INPUT_LAYOUT
+	// ROOT SIGNATURE, INPUT_LAYOUT
 	ComPtr<ID3D12RootSignature>				m_opaqueRootSig = nullptr,
 											m_computeRootSig = nullptr;
 
@@ -85,7 +104,7 @@ private:
 											m_computePSO = nullptr;
 
 	// MESH
-	std::unique_ptr<Mesh>					m_mesh = nullptr;
+	Scope<Mesh>								m_mesh = nullptr;
 
 
 
@@ -96,4 +115,8 @@ private:
 	uint16_t								m_clientWidth,
 											m_clientHeight;
 
+	uint32_t								m_currentMaxSamples = 1024;
+	RTConstants								m_rtConstants{};
+	Scope<RTCamera>							m_camera;
+	std::vector<RTSphere>					m_spheres;
 };

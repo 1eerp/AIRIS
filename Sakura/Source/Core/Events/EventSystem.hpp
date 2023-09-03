@@ -26,7 +26,7 @@ class EventSystem
 public:
 	using EventCallback = bool(IEventListener::*)(IEvent*);
 	using LCPair = SPair<IEventListener*, EventCallback>;
-	using EventRef = ref<IEvent>;
+	using EventRef = Ref<IEvent>;
 
 	bool Init();
 	static EventSystem* GetGInstance();

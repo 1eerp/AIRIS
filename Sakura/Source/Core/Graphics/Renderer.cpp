@@ -2,19 +2,28 @@
 #include "Core/Log.hpp"
 #include "Core/Events/EventSystem.hpp"
 #include "Core/Events/ApplicationEvents.hpp"
+#include "Core/Events/InputEvents.h"
+#include "Core/Input/Input.hpp"
+#include <random>
+
 
 ComPtr<ID3DBlob> SCompileShader(const std::wstring& filename, const D3D_SHADER_MACRO* defines, const std::string& entrypoint, const std::string& target);
 
 RRenderer::RRenderer(uint16_t width, uint16_t height)
 	:m_clientWidth(width), m_clientHeight(height)
 {
-	try { Init(); }
+	try { 
+		Init();
+	}
 	catch(std::exception e)
 	{
 		CORE_ERROR(e.what());
 		DebugBreak();
 	}
 	EVENTSYSTEM->RegisterEventListener(EventType::WindowResize, dynamic_cast<IEventListener*>(this), reinterpret_cast<EventSystem::EventCallback>(&RRenderer::OnWindowResize));
+	EVENTSYSTEM->RegisterEventListener(EventType::KeyPressed, dynamic_cast<IEventListener*>(this), reinterpret_cast<EventSystem::EventCallback>(&RRenderer::OnKeyDown));
+
+
 	CORE_INFO("Renderer Intialized");
 }
 
@@ -26,6 +35,54 @@ RRenderer::~RRenderer()
 
 void RRenderer::Update()
 {
+	float speedMultiplier = 0.1f;
+	glm::vec3 delta{0};
+	if (INPUT->GetKeyState(InputCode::W) > InputState::KeyUp)
+		delta += m_camera->GetDirection();
+	if (INPUT->GetKeyState(InputCode::S) > InputState::KeyUp)
+		delta += -m_camera->GetDirection();
+	if (INPUT->GetKeyState(InputCode::A) > InputState::KeyUp)
+		delta += -m_camera->GetRight();
+	if (INPUT->GetKeyState(InputCode::D) > InputState::KeyUp)
+		delta += m_camera->GetRight();
+
+	if (delta.x || delta.y || delta.z)
+	{
+		auto x =  glm::normalize(delta) * speedMultiplier;
+		m_camera->SetPosition(m_camera->GetPosition() + x);
+		m_camera->SetLookAt(m_camera->GetLookAt() + x);
+	}
+
+	if (m_camera->RequiresUpdate())
+	{
+		m_camera->Update();
+		m_cameraConstantBuffer->CopyData(0, m_camera->GetShaderData());
+		m_rtConstants.AccumlateSamples = false;
+		m_rtConstants.ResetOutput = true;
+		m_rtConstants.AccumulatedSamples = 1;
+	}
+	std::random_device r;
+	std::default_random_engine e1(r());
+	std::uniform_int_distribution<unsigned int> uniform_dist(0, 0xffffffff);
+
+	// Random seed is set in the constructor
+	m_rtConstants.RandSeed = uniform_dist(e1);
+
+	m_rtConstantBuffer->CopyData(0, m_rtConstants);
+	
+
+	// Move idle solution to shader
+	if (m_rtConstants.AccumlateSamples || m_rtConstants.ResetOutput)
+		Draw();
+
+	m_rtConstants.ResetOutput = false;
+	m_rtConstants.AccumlateSamples = m_rtConstants.AccumulatedSamples < m_currentMaxSamples;
+	if (!(m_rtConstants.AccumulatedSamples - (m_currentMaxSamples-1)))
+	{
+		// This actually gets displayed 1 samples before the currentMax
+		CORE_INFO("Accumulated {} samples!", m_currentMaxSamples);
+	}
+	m_rtConstants.AccumulatedSamples += m_rtConstants.AccumlateSamples;
 }
 
 void RRenderer::Draw()
@@ -37,9 +94,10 @@ void RRenderer::Draw()
 	ThrowIfFailed(m_cmdAlloc->Reset());
 	ThrowIfFailed(m_cmdList->Reset(m_cmdAlloc.Get(), m_computePSO.Get()));
 
-	D3D12_RESOURCE_BARRIER bs[2];
-	bs[0] = CD3DX12_RESOURCE_BARRIER::Transition(m_swapChainBuffers[m_curBackBuffer].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_COPY_DEST);
-	bs[1] = CD3DX12_RESOURCE_BARRIER::Transition(m_computeOutputBuffer.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	D3D12_RESOURCE_BARRIER bs[2]{
+		CD3DX12_RESOURCE_BARRIER::Transition(m_swapChainBuffers[m_curBackBuffer].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_COPY_DEST),
+		CD3DX12_RESOURCE_BARRIER::Transition(m_computeOutputBuffer.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
+	};
 
 	// Set Viewport
 	m_cmdList->RSSetViewports(1, &m_viewport);
@@ -56,9 +114,10 @@ void RRenderer::Draw()
 	m_cmdList->SetDescriptorHeaps(1, heaps->GetAddressOf());
 
 	// Dispatch compute shader
-	m_cmdList->SetComputeRootDescriptorTable(0, m_srvHeap->GetGPUDescriptorHandleForHeapStart());
+	D3D12_GPU_DESCRIPTOR_HANDLE descH = m_srvHeap->GetGPUDescriptorHandleForHeapStart();
+	m_cmdList->SetComputeRootDescriptorTable(0, descH);
+
 	unsigned int xGroups = static_cast<unsigned int>(ceilf(m_clientWidth / 256.0f));
-	
 	m_cmdList->Dispatch(xGroups, m_clientHeight, 1);
 
 	// Ready output texture as copy source and backbuffer from copy dest to present state (the transitions will take place, respectively and sequentially, before and after the resource has been copied)
@@ -92,8 +151,49 @@ bool RRenderer::OnWindowResize(IEvent* e)
 	unsigned int xGroups = static_cast<unsigned int>(ceilf(m_clientWidth / 256.0f));
 	CORE_INFO("Resizing Buffers, Width: {}, Height: {}, X Dispatch Groups(256 warp size):{}", m_clientWidth, m_clientWidth, xGroups);
 	ResizeBuffers(m_clientWidth, m_clientHeight);
+
+	m_camera->SetViewport({ m_clientWidth, m_clientHeight }, SWindow::GetInstance()->GetAspectRatio());
 	return false;
 }
+
+bool RRenderer::OnKeyDown(IEvent* e)
+{
+	KeyPressedEvent* event = dynamic_cast<KeyPressedEvent*>(e);
+	switch (event->GetKeyCode())
+	{
+		case KeyCode::I:
+		{
+			if (m_rtConstants.MaxRayBounces < 10)
+			{
+				m_rtConstants.MaxRayBounces += 1;
+				m_rtConstants.AccumlateSamples = false;
+				m_rtConstants.ResetOutput = true;
+				m_rtConstants.AccumulatedSamples = 1;
+			}
+
+			CORE_INFO("Ray Bounces: {}", m_rtConstants.MaxRayBounces);
+			break;
+		}
+		case KeyCode::K:
+		{
+			if (m_rtConstants.MaxRayBounces)
+			{
+				m_rtConstants.MaxRayBounces -= 1;
+				m_rtConstants.AccumlateSamples = false;
+				m_rtConstants.ResetOutput = true;
+				m_rtConstants.AccumulatedSamples = 1;
+			}
+				
+			CORE_INFO("Ray Bounces: {}", m_rtConstants.MaxRayBounces);
+			break;
+		}
+		default:
+			break;
+	}
+
+	return false;
+}
+
 
 void RRenderer::Init()
 {
@@ -137,9 +237,11 @@ void RRenderer::Init()
 	CreateSwapChain();
 	CreateDescriptorHeaps();
 	ResizeBuffers(m_clientWidth, m_clientHeight);
+	CreateConstantBuffers();
+	
 
 	m_cmdList->Reset(m_cmdAlloc.Get(), nullptr);
-	CreateMesh();
+	CreateObjects();
 	CreateInputLayoutAndShaders();
 	CreateRootSignatureAndPSOs();
 	m_cmdList->Close();
@@ -149,6 +251,9 @@ void RRenderer::Init()
 
 	// Wait for Intialization
 	FlushCommandQueue();
+
+	// Initialize Camera
+	m_camera = std::make_unique<RTCamera>(glm::vec3{ 0.f, 0.f, 0.f }, glm::vec3{ 0.f, 0.f, 1.f }, glm::vec3{ 0.f, 1.f, 0.f }, glm::ivec2{ m_clientWidth, m_clientHeight}, SWindow::GetInstance()->GetAspectRatio(), 90.f, 1.f);
 
 }
 
@@ -193,7 +298,7 @@ void RRenderer::CreateDescriptorHeaps()
 
 	srvDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 	srvDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-	srvDesc.NumDescriptors = 1;
+	srvDesc.NumDescriptors = 5;
 
 	ThrowIfFailed(m_device->CreateDescriptorHeap(&rtvDesc, IID_PPV_ARGS(&m_rtvHeap)));
 	ThrowIfFailed(m_device->CreateDescriptorHeap(&dsvDesc, IID_PPV_ARGS(&m_dsvHeap)));
@@ -216,22 +321,22 @@ void RRenderer::CreateInputLayoutAndShaders()
 	};
 }
 
-void RRenderer::CreateMesh()
+void RRenderer::CreateObjects()
 {
 	auto aspectRatio = SWindow::GetInstance()->GetAspectRatio();
 	std::vector<Vertex> vertices(3);
 	vertices =
-	{	
-		Vertex({ XMFLOAT3( 0.0f, 0.25f * aspectRatio, 0.0f ), XMFLOAT4(Colors::Red)}),
-		Vertex({ XMFLOAT3( 0.25f, -0.25f * aspectRatio, 0.0f ), XMFLOAT4(0.0f, 1.0f, 0.0f, 0.0f)}),
-		Vertex({ XMFLOAT3( -0.25f, -0.25f * aspectRatio, 0.0f ), XMFLOAT4(Colors::Blue)}),
+	{
+		Vertex({ DirectX::XMFLOAT3(0.0f, 0.25f * aspectRatio, 0.0f), DirectX::XMFLOAT4(DirectX::Colors::Red)}),
+		Vertex({ DirectX::XMFLOAT3(0.25f, -0.25f * aspectRatio, 0.0f), DirectX::XMFLOAT4(0.0f, 1.0f, 0.0f, 0.0f)}),
+		Vertex({ DirectX::XMFLOAT3(-0.25f, -0.25f * aspectRatio, 0.0f), DirectX::XMFLOAT4(DirectX::Colors::Blue)}),
 	};
 
 	std::vector<std::uint16_t> indices =
 	{
 		0,1,2
 	};
-	m_mesh = std::make_unique<Mesh>(m_device.Get(), m_cmdList.Get(), vertices, indices);
+	m_mesh = CreateScope<Mesh>(m_device.Get(), m_cmdList.Get(), vertices, indices);
 	m_mesh->m_name = "TriangleMesh";
 
 	SubMesh sm;
@@ -239,6 +344,27 @@ void RRenderer::CreateMesh()
 	sm.StartIndexLocation = 0;
 	sm.IndexCount = static_cast<uint32_t>(indices.size());
 	m_mesh->m_subMeshes["Triangle"] = sm;
+
+
+	// RT SPHERES
+	m_spheres.push_back({ { 0.f, 0.f, 1.5f }, 0.5 });
+	m_spheres.push_back({ { 0.f, -500.5f, 1.5f }, 500 });
+	m_sphereBuffer = CreateDefaultBuffer(m_device.Get(), m_cmdList.Get(), m_spheres.data(), m_spheres.size() * sizeof(RTSphere), m_sphereUploadBuffer);
+	
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
+	srvDesc.Format = DXGI_FORMAT_UNKNOWN; // https://learn.microsoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_buffer_srv
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+	srvDesc.Buffer.FirstElement = 0;
+	srvDesc.Buffer.StructureByteStride = sizeof(RTSphere);
+	srvDesc.Buffer.NumElements = static_cast<UINT>(m_spheres.size());
+	srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+
+	// Shader Resource View for the Buffer that contains the sphere data is the 4 and last descriptor in the srv descriptor heap
+	CD3DX12_CPU_DESCRIPTOR_HANDLE descHandle(m_srvHeap->GetCPUDescriptorHandleForHeapStart()); 
+	descHandle.Offset(4, m_info.DescSizes.CBV);
+	m_device->CreateShaderResourceView(m_sphereBuffer.Get(), &srvDesc, descHandle);
+	
 }
 
 void RRenderer::CreateRootSignatureAndPSOs()
@@ -262,11 +388,14 @@ void RRenderer::CreateRootSignatureAndPSOs()
 	ThrowIfFailed(hr);
 	ThrowIfFailed(m_device->CreateRootSignature(NULL, rootSerializerBlob->GetBufferPointer(), rootSerializerBlob->GetBufferSize(), IID_PPV_ARGS(&m_opaqueRootSig)));
 
-	// Compute Shader root signature
-	CD3DX12_DESCRIPTOR_RANGE table{};
-	table.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
+	// COMPUTE SHADER ROOT SIGNATURE
+	std::array<CD3DX12_DESCRIPTOR_RANGE, 3> ranges;
+	ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2, 0); // Final Output Color Texture and Accumulated Color Texture
+	ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 2, 0); // RTFrame and Camera Constants
+	ranges[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0); // Geometry Data (For now: only Spheres, just the position and the radius)
+
 	CD3DX12_ROOT_PARAMETER params[1];
-	params[0].InitAsDescriptorTable(1, &table);
+	params[0].InitAsDescriptorTable(static_cast<UINT>(ranges.size()), &ranges[0]);
 	CD3DX12_ROOT_SIGNATURE_DESC crDesc(1, params, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
 	rootSerializerBlob = nullptr,
@@ -326,6 +455,29 @@ void RRenderer::CreateRootSignatureAndPSOs()
 
 }
 
+void RRenderer::CreateConstantBuffers()
+{
+	m_rtConstantBuffer = CreateScope<UploadBuffer<RTConstants>>(m_device.Get(), 1, true);
+	m_cameraConstantBuffer = CreateScope<UploadBuffer<RTCameraSD>>(m_device.Get(), 1, true);
+
+	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc;
+	cbvDesc.BufferLocation = m_rtConstantBuffer->Resource()->GetGPUVirtualAddress();
+	cbvDesc.SizeInBytes = CalcConstantBufferByteSize(sizeof(RTConstants));
+
+	CD3DX12_CPU_DESCRIPTOR_HANDLE descHandle(m_srvHeap->GetCPUDescriptorHandleForHeapStart());
+	descHandle.Offset(2, m_info.DescSizes.UAV);
+
+	// Create Descriptor for Frame Constants
+	m_device->CreateConstantBufferView(&cbvDesc, descHandle);
+	
+	cbvDesc.BufferLocation = m_cameraConstantBuffer->Resource()->GetGPUVirtualAddress();
+	cbvDesc.SizeInBytes = CalcConstantBufferByteSize(sizeof(RTCamera));
+	descHandle.Offset(1, m_info.DescSizes.CBV);
+	// Create Descriptor for Camera Constants
+	m_device->CreateConstantBufferView(&cbvDesc, descHandle);
+
+}
+
 void RRenderer::ResizeBuffers(uint16_t width, uint16_t height)
 {
 	assert(m_device);
@@ -342,13 +494,10 @@ void RRenderer::ResizeBuffers(uint16_t width, uint16_t height)
 		m_swapChainBuffers[i].Reset();
 	m_depthStencilBuffer.Reset();
 	m_computeOutputBuffer.Reset();
+	m_computeAccumulateBuffer.Reset();
 
 	// Resize the swap chain.
-	ThrowIfFailed(m_swapChain->ResizeBuffers(
-		m_config.SwapChainBufferCount,
-		width, height,
-		m_config.BackBufferFormat,
-		DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH));
+	ThrowIfFailed(m_swapChain->ResizeBuffers(m_config.SwapChainBufferCount, width, height, m_config.BackBufferFormat, DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH));
 
 	m_curBackBuffer = 0;
 
@@ -414,30 +563,44 @@ void RRenderer::ResizeBuffers(uint16_t width, uint16_t height)
 
 
 	// COMPUTE STUFF
-	D3D12_RESOURCE_DESC rtOutputDesc{};
-	rtOutputDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-	rtOutputDesc.Alignment = 0;
-	rtOutputDesc.Width = width;
-	rtOutputDesc.Height = height;
-	rtOutputDesc.DepthOrArraySize = 1;
-	rtOutputDesc.MipLevels = 1;
-	rtOutputDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	rtOutputDesc.SampleDesc.Count = 1;
-	rtOutputDesc.SampleDesc.Quality = 0;
-	rtOutputDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-	rtOutputDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+	D3D12_RESOURCE_DESC rtRWTextureDesc{};
+	rtRWTextureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+	rtRWTextureDesc.Alignment = 0;
+	rtRWTextureDesc.Width = width;
+	rtRWTextureDesc.Height = height;
+	rtRWTextureDesc.DepthOrArraySize = 1;
+	rtRWTextureDesc.MipLevels = 1;
+	rtRWTextureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	rtRWTextureDesc.SampleDesc.Count = 1;
+	rtRWTextureDesc.SampleDesc.Quality = 0;
+	rtRWTextureDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+	rtRWTextureDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
-	ThrowIfFailed(m_device->CreateCommittedResource(&textureProps, D3D12_HEAP_FLAG_NONE, &rtOutputDesc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(m_computeOutputBuffer.GetAddressOf())));
 
-	// Create descriptor to the texture
+	ThrowIfFailed(m_device->CreateCommittedResource(&textureProps, D3D12_HEAP_FLAG_NONE, &rtRWTextureDesc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(m_computeOutputBuffer.GetAddressOf())));
+	// ACCUMULATED COLOR BUFFER 
+	rtRWTextureDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT; 
+	ThrowIfFailed(m_device->CreateCommittedResource(&textureProps, D3D12_HEAP_FLAG_NONE, &rtRWTextureDesc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(m_computeAccumulateBuffer.GetAddressOf())));
+	
+	
+	// CREATE DESCRIPTORS FOR COMPUTE RESOURCES
 	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{};
 	uavDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
 	uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
 	uavDesc.Texture2D.MipSlice = 0;
-	m_device->CreateUnorderedAccessView(m_computeOutputBuffer.Get(), nullptr, &uavDesc, m_srvHeap->GetCPUDescriptorHandleForHeapStart());
+	CD3DX12_CPU_DESCRIPTOR_HANDLE cpuDH = CD3DX12_CPU_DESCRIPTOR_HANDLE(m_srvHeap->GetCPUDescriptorHandleForHeapStart());
+	m_device->CreateUnorderedAccessView(m_computeOutputBuffer.Get(), nullptr, &uavDesc, cpuDH);
+	uavDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+	cpuDH.Offset(1, m_info.DescSizes.UAV);
+	m_device->CreateUnorderedAccessView(m_computeAccumulateBuffer.Get(), nullptr, &uavDesc, cpuDH);
 
-	D3D12_RESOURCE_BARRIER uavBar = CD3DX12_RESOURCE_BARRIER::Transition(m_computeOutputBuffer.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_SOURCE);
-	m_cmdList->ResourceBarrier(1, &uavBar);
+	// RESOURCE TRANSITIONS
+	D3D12_RESOURCE_BARRIER uavBar[2] = { 
+		CD3DX12_RESOURCE_BARRIER::Transition(m_computeOutputBuffer.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_SOURCE),
+		CD3DX12_RESOURCE_BARRIER::Transition(m_computeAccumulateBuffer.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS) 
+	};
+	m_cmdList->ResourceBarrier(2, uavBar);
+
 
 	// Execute the resize commands.
 	m_cmdList->Close();
@@ -502,7 +665,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE RRenderer::DepthStencilView() const
 
 D3D12_CPU_DESCRIPTOR_HANDLE RRenderer::ComputeTextureUAView() const
 {
-	return m_dsvHeap->GetCPUDescriptorHandleForHeapStart();
+	return m_srvHeap->GetCPUDescriptorHandleForHeapStart();
 }
 
 

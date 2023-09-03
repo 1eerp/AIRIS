@@ -57,7 +57,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)ED\spdlog\include\;$(ProjectDir)Source\</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)ED\spdlog\include\;$(SolutionDir)ED\glm\;$(ProjectDir)Source\</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
@@ -76,7 +76,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)ED\spdlog\include\;$(ProjectDir)Source\</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)ED\spdlog\include\;$(SolutionDir)ED\glm\;$(ProjectDir)Source\</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
@@ -91,8 +91,11 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="Source\Core\API\D3D12\Buffer.cpp" />
     <ClCompile Include="Source\Core\API\D3D12\D3D12API.cpp" />
+    <ClCompile Include="Source\Core\API\D3D12\Util.cpp" />
     <ClCompile Include="Source\Core\Events\EventSystem.cpp" />
+    <ClCompile Include="Source\Core\Graphics\Camera.cpp" />
     <ClCompile Include="Source\Core\Graphics\Mesh.cpp" />
     <ClCompile Include="Source\Core\Graphics\Renderer.cpp" />
     <ClCompile Include="Source\Core\Input\Input.cpp" />
@@ -102,21 +105,25 @@
     <ClCompile Include="Source\Utils\WinMessage.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Source\Core\API\Buffer.h" />
+    <ClInclude Include="Source\Core\API\D3D12\Buffer.h" />
     <ClInclude Include="Source\Core\API\D3D12\D3D12API.hpp" />
     <ClInclude Include="Source\Core\API\D3D12\d3dx12.h" />
+    <ClInclude Include="Source\Core\API\D3D12\D3DUtil.hpp" />
     <ClInclude Include="Source\Core\API\RendererAPI.hpp" />
     <ClInclude Include="Source\Core\Events\ApplicationEvents.hpp" />
     <ClInclude Include="Source\Core\Events\EventSystem.hpp" />
     <ClInclude Include="Source\Core\Events\IEvent.hpp" />
     <ClInclude Include="Source\Core\Events\IEventListener.hpp" />
     <ClInclude Include="Source\Core\Events\InputEvents.h" />
+    <ClInclude Include="Source\Core\Graphics\Camera.hpp" />
     <ClInclude Include="Source\Core\Graphics\Mesh.hpp" />
     <ClInclude Include="Source\Core\Graphics\Renderer.hpp" />
+    <ClInclude Include="Source\Core\Graphics\RTShapes.hpp" />
     <ClInclude Include="Source\Core\Graphics\Vertex.hpp" />
     <ClInclude Include="Source\Core\Input\Input.hpp" />
     <ClInclude Include="Source\Core\Input\InputCodes.hpp" />
     <ClInclude Include="Source\Core\Log.hpp" />
+    <ClInclude Include="Source\Core\Timer.hpp" />
     <ClInclude Include="Source\Core\Window.hpp" />
     <ClInclude Include="Source\Core\Application.hpp" />
     <ClInclude Include="Source\Utils\WinMessage.hpp" />

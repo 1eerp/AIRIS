@@ -29,7 +29,7 @@ public:
 
 private:
 	// The main window associated with this application
-	RRenderer m_renderer;
+	Scope<RRenderer> m_renderer;
 	SWindow* m_mainWindow;
 	static SApp* s_appInstance;
 };
