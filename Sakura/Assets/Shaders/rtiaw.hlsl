@@ -18,8 +18,8 @@ cbuffer RTConstants : register(b0)
 // CAMERA FRAME CONSTANTS
 cbuffer RTCameraSD : register(b1)
 {
-	float3  Position,
-			Direction,
+	float3  CamPosition,
+			CamDirection,
 			Pixel00Center,
 			PixelDeltaX,
 			PixelDeltaY;
@@ -45,8 +45,8 @@ void CS( uint3 dispatchThreadID : SV_DispatchThreadID, uint3 dispatchGroupID : S
 	rng_state = InitalRandomSeed * (dispatchThreadID.x * w + dispatchThreadID.y);
 	
 	Camera cam;
-	cam.origin = Position;
-	cam.lookAt = Direction;
+	cam.origin = CamPosition;
+	cam.lookAt = CamDirection;
 	cam.focalLength = 1.0f;
 		
 	// Create Inital Incident Ray
@@ -63,7 +63,8 @@ void CS( uint3 dispatchThreadID : SV_DispatchThreadID, uint3 dispatchGroupID : S
 
 Ray GetRay(float u, float v, Camera cam)
 {
-	float3 pixelLoc = Pixel00Center + (u * PixelDeltaX + v * PixelDeltaY);
+	//				TL Pixel Center		Move to pixel for this thread		RANDOM OFFSET WITHIN THE PIXEL/NOT INTRUDING ON SURROUNDING PIXELS
+    float3 pixelLoc = Pixel00Center + (u * PixelDeltaX + v * PixelDeltaY) + (PixelDeltaX * GetRandomSFloat() + PixelDeltaY * GetRandomSFloat());
 	
 	Ray r;
 	r.origin = cam.origin;

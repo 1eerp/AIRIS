@@ -16,6 +16,11 @@ float GetRandomFloat()
     return rand_pcg() / float(UINTMAX);
 }
 
+float GetRandomSFloat()
+{
+    return ((GetRandomFloat()) - 0.5f) * 2;
+}
+
 float3 GetRandomFloat3()
 {
     return float3(GetRandomFloat(), GetRandomFloat(), GetRandomFloat());
@@ -92,7 +97,7 @@ class Sphere
     bool Hit(inout Ray r, inout HitRecord rec, float tMin, float tMax)
     {
         float3  oc = r.origin - position;
-        float   a = pow(length(r.direction), 2),
+        float   a = 1, //Ray Direction vector is normalized during ray generation | Original: pow(length(r.direction), 2),
                 half_b = dot(oc, r.direction),
                 c = pow(length(oc), 2) - radius * radius,
                 discriminant = half_b * half_b - a * c;
