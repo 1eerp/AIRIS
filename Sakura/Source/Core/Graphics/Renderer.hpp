@@ -42,6 +42,7 @@ public:
 
 	virtual bool OnWindowResize(IEvent*) override;
 	virtual bool OnKeyDown(IEvent*) override;
+	virtual bool OnMouseWheel(IEvent*) override;
 
 private:
 	virtual void Init() override;

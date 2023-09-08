@@ -22,6 +22,7 @@ RRenderer::RRenderer(uint16_t width, uint16_t height)
 	}
 	EVENTSYSTEM->RegisterEventListener(EventType::WindowResize, dynamic_cast<IEventListener*>(this), reinterpret_cast<EventSystem::EventCallback>(&RRenderer::OnWindowResize));
 	EVENTSYSTEM->RegisterEventListener(EventType::KeyPressed, dynamic_cast<IEventListener*>(this), reinterpret_cast<EventSystem::EventCallback>(&RRenderer::OnKeyDown));
+	EVENTSYSTEM->RegisterEventListener(EventType::MouseScrolled, dynamic_cast<IEventListener*>(this), reinterpret_cast<EventSystem::EventCallback>(&RRenderer::OnMouseWheel));
 
 
 	CORE_INFO("Renderer Intialized");
@@ -194,6 +195,15 @@ bool RRenderer::OnKeyDown(IEvent* e)
 	return false;
 }
 
+bool RRenderer::OnMouseWheel(IEvent* e)
+{
+	MouseScrolledEvent* scrollEvent = dynamic_cast<MouseScrolledEvent*>(e);
+	float delta = scrollEvent->GetScrollDelta() / 120.f;
+	float newFov = m_camera->GetFov() - delta * 5; // Negated based on my control preferences
+	if (newFov > 14 && newFov < 101)
+		m_camera->SetFov(newFov);
+	return false;
+}
 
 void RRenderer::Init()
 {
