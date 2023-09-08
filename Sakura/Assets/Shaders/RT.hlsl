@@ -16,24 +16,19 @@ float GetRandomFloat()
     return rand_pcg() / float(UINTMAX);
 }
 
-float GetRandomSFloat()
-{
-    return ((GetRandomFloat()) - 0.5f) * 2;
-}
-
 float3 GetRandomFloat3()
 {
     return float3(GetRandomFloat(), GetRandomFloat(), GetRandomFloat());
 }
 
-float3 RandomUnitFloat3()
+float3 GetRandomUnitFloat3()
 {
     return normalize((GetRandomFloat3() - .5f) * 2);
 }
 
 float3 RandomNormalHemisphereFloat3(float3 normal)
 {
-    float3 on_unit_sphere = RandomUnitFloat3();
+    float3 on_unit_sphere = GetRandomUnitFloat3();
     if (dot(on_unit_sphere, normal) > 0.0) // In the same hemisphere as the normal
         return on_unit_sphere;
     else
@@ -73,6 +68,7 @@ class HitRecord
     float3 normal;
     float t;
     bool frontFace;
+    uint materialIndex;
 
     void SetFaceNormal(const Ray r, const float3 outwardNormal)
     {
@@ -82,10 +78,19 @@ class HitRecord
 };
 
 
-struct SphereShape
+struct RTSphere
 {
     float3 position;
     float radius;
+    uint matIndex;
+};
+
+
+struct RTMaterial
+{
+    float3  Albedo;
+    uint    Type;
+    float   Roughness;
 };
 
 class Sphere
@@ -94,7 +99,7 @@ class Sphere
     float radius;
 
     
-    bool Hit(inout Ray r, inout HitRecord rec, float tMin, float tMax)
+    bool Hit(inout Ray r, out HitRecord rec, float tMin, float tMax)
     {
         float3  oc = r.origin - position;
         float   a = 1, //Ray Direction vector is normalized during ray generation | Original: pow(length(r.direction), 2),
@@ -119,7 +124,7 @@ class Sphere
         rec.t = t;
         rec.pos = r.at(t);
         rec.SetFaceNormal(r, (rec.pos - position) / radius);
-
+        rec.materialIndex = 0;
         return true;
     }
 };

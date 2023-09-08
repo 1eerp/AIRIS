@@ -263,7 +263,7 @@ void RRenderer::Init()
 	FlushCommandQueue();
 
 	// Initialize Camera
-	m_camera = std::make_unique<RTCamera>(glm::vec3{ 0.f, 0.f, 0.f }, glm::vec3{ 0.f, 0.f, 1.f }, glm::vec3{ 0.f, 1.f, 0.f }, glm::ivec2{ m_clientWidth, m_clientHeight}, SWindow::GetInstance()->GetAspectRatio(), 90.f, 1.f);
+	m_camera = std::make_unique<RTCamera>(glm::vec3{ 13.f, 2.f, -3.f }, glm::vec3{ 0.f, 0.f, 0.f }, glm::vec3{ 0.f, 1.f, 0.f }, glm::ivec2{ m_clientWidth, m_clientHeight}, SWindow::GetInstance()->GetAspectRatio(), 20.f, 1.f);
 
 }
 
@@ -308,7 +308,7 @@ void RRenderer::CreateDescriptorHeaps()
 
 	srvDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 	srvDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-	srvDesc.NumDescriptors = 5;
+	srvDesc.NumDescriptors = 6;
 
 	ThrowIfFailed(m_device->CreateDescriptorHeap(&rtvDesc, IID_PPV_ARGS(&m_rtvHeap)));
 	ThrowIfFailed(m_device->CreateDescriptorHeap(&dsvDesc, IID_PPV_ARGS(&m_dsvHeap)));
@@ -356,10 +356,77 @@ void RRenderer::CreateObjects()
 	m_mesh->m_subMeshes["Triangle"] = sm;
 
 
+
+	// Random stuff / refactor and move to its own function/file (also remove from Update function)
+	
+	std::random_device r;
+	std::default_random_engine e1(r());
+	std::uniform_int_distribution<unsigned int> uniform_dist(0, 0xffffffff);
+	auto randomFloat = [&e1, &uniform_dist]() {
+		return uniform_dist(e1) / (float)0xffffffff;
+	};
+
 	// RT SPHERES
-	m_spheres.push_back({ { 0.f, 0.f, 1.5f }, 0.5 });
-	m_spheres.push_back({ { 0.f, -500.5f, 1.5f }, 500 });
+
+	m_materials.push_back({{ 0.5f, 0.5f, 0.5f }, MTType::Diffuse, .0f});	// Ground material
+	m_spheres.push_back({ {0.f, -1000.f, 0.f}, 1000.f, 0});
+	
+	RTMaterial sphereMaterial;
+	glm::vec3 center;
+	int size = 6;
+
+	for (int a = -size; a < size; a++)
+	{
+		for (int b = -size; b < size; b++)
+		{
+			float mat = randomFloat();
+			center = { a + 0.9f * randomFloat(), 0.2f, b + 0.9f * randomFloat() };
+
+			if (((a < -4 || a > 4) || (b > 1 || b < -1)) && (center - glm::vec3(4.f, 0.2f, 0.f)).length() > 0.9f)
+			{
+				sphereMaterial.Albedo = glm::vec3(randomFloat(), randomFloat(), randomFloat());
+				sphereMaterial.Roughness = randomFloat();
+				if (mat < 0.75f)
+				{
+					sphereMaterial.Type = Diffuse;
+				}else if (mat < 0.90)
+				{
+					// metal
+					sphereMaterial.Type = Metal;
+				}
+				else
+				{
+					sphereMaterial.Type = Dielectric;
+				}
+				m_materials.push_back(sphereMaterial);
+				m_spheres.push_back({ center, 0.2f, static_cast<uint32_t>(m_materials.size() - 1) });
+			}
+		}
+	}
+	
+	sphereMaterial.Albedo = glm::vec3(randomFloat(), randomFloat(), randomFloat());
+	sphereMaterial.Roughness = randomFloat();
+	sphereMaterial.Type = Dielectric;
+	m_materials.push_back(sphereMaterial);
+	m_spheres.push_back({ {0.f, 1.f, 0.f}, 1.0f, static_cast<uint32_t>(m_materials.size() - 1) });
+
+
+	sphereMaterial.Albedo = glm::vec3(randomFloat(), randomFloat(), randomFloat());
+	sphereMaterial.Roughness = 0.0f;
+	sphereMaterial.Type = Metal;
+	m_materials.push_back(sphereMaterial);
+	m_spheres.push_back({ {4.f, 1.f, 0.f}, 1.0f, static_cast<uint32_t>(m_materials.size() - 1) });
+
+
+	sphereMaterial.Albedo = glm::vec3(randomFloat(), randomFloat(), randomFloat());
+	sphereMaterial.Roughness = randomFloat();
+	sphereMaterial.Type = Diffuse;
+	m_materials.push_back(sphereMaterial);
+	m_spheres.push_back({ {-4.f, 1.f, 0.f}, 1.0f, static_cast<uint32_t>(m_materials.size() - 1) });
+
+
 	m_sphereBuffer = CreateDefaultBuffer(m_device.Get(), m_cmdList.Get(), m_spheres.data(), m_spheres.size() * sizeof(RTSphere), m_sphereUploadBuffer);
+	m_materialBuffer = CreateDefaultBuffer(m_device.Get(), m_cmdList.Get(), m_materials.data(), m_spheres.size() * sizeof(RTMaterial), m_materialUploadBuffer);
 	
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
 	srvDesc.Format = DXGI_FORMAT_UNKNOWN; // https://learn.microsoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_buffer_srv
@@ -375,6 +442,11 @@ void RRenderer::CreateObjects()
 	descHandle.Offset(4, m_info.DescSizes.CBV);
 	m_device->CreateShaderResourceView(m_sphereBuffer.Get(), &srvDesc, descHandle);
 	
+	srvDesc.Buffer.StructureByteStride = sizeof(RTMaterial);
+	srvDesc.Buffer.NumElements = static_cast<UINT>(m_materials.size());
+	descHandle.Offset(1, m_info.DescSizes.SRV);
+	m_device->CreateShaderResourceView(m_materialBuffer.Get(), &srvDesc, descHandle);
+
 }
 
 void RRenderer::CreateRootSignatureAndPSOs()
@@ -402,7 +474,7 @@ void RRenderer::CreateRootSignatureAndPSOs()
 	std::array<CD3DX12_DESCRIPTOR_RANGE, 3> ranges;
 	ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2, 0); // Final Output Color Texture and Accumulated Color Texture
 	ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 2, 0); // RTFrame and Camera Constants
-	ranges[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0); // Geometry Data (For now: only Spheres, just the position and the radius)
+	ranges[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0); // Geometry Data (For now: only Spheres, just the position and the radius) and Materials
 
 	CD3DX12_ROOT_PARAMETER params[1];
 	params[0].InitAsDescriptorTable(static_cast<UINT>(ranges.size()), &ranges[0]);

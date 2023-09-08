@@ -5,7 +5,7 @@
 #include "Core/API/RendererAPI.hpp"
 #include "Mesh.hpp"
 #include "Camera.hpp"
-#include "RTShapes.hpp"
+#include "RTHelper.hpp"
 using Microsoft::WRL::ComPtr;
 
 
@@ -80,6 +80,8 @@ private:
 	ComPtr<ID3D12Resource>					m_depthStencilBuffer,
 											m_computeOutputBuffer,
 											m_computeAccumulateBuffer,
+											m_materialBuffer,
+											m_materialUploadBuffer,
 											m_sphereBuffer,
 											m_sphereUploadBuffer;
 
@@ -120,4 +122,5 @@ private:
 	RTConstants								m_rtConstants{};
 	Scope<RTCamera>							m_camera;
 	std::vector<RTSphere>					m_spheres;
+	std::vector<RTMaterial>					m_materials;
 };
