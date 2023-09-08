@@ -122,7 +122,7 @@
     <ClInclude Include="Source\Core\API\D3D12\D3DUtil.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Core\Graphics\RTShapes.hpp">
+    <ClInclude Include="Source\Core\Graphics\RTHelper.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Source\Core\Timer.hpp">

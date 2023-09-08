@@ -72,9 +72,7 @@ void RRenderer::Update()
 	m_rtConstantBuffer->CopyData(0, m_rtConstants);
 	
 
-	// Move idle solution to shader
-	if (m_rtConstants.AccumlateSamples || m_rtConstants.ResetOutput)
-		Draw();
+	Draw();
 
 	m_rtConstants.ResetOutput = false;
 	m_rtConstants.AccumlateSamples = m_rtConstants.AccumulatedSamples < m_currentMaxSamples;

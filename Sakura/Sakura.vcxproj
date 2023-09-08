@@ -118,7 +118,7 @@
     <ClInclude Include="Source\Core\Graphics\Camera.hpp" />
     <ClInclude Include="Source\Core\Graphics\Mesh.hpp" />
     <ClInclude Include="Source\Core\Graphics\Renderer.hpp" />
-    <ClInclude Include="Source\Core\Graphics\RTShapes.hpp" />
+    <ClInclude Include="Source\Core\Graphics\RTHelper.hpp" />
     <ClInclude Include="Source\Core\Graphics\Vertex.hpp" />
     <ClInclude Include="Source\Core\Input\Input.hpp" />
     <ClInclude Include="Source\Core\Input\InputCodes.hpp" />
