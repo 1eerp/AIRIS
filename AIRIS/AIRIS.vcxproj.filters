@@ -59,7 +59,7 @@
     <ClInclude Include="Source\Core\Log.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Sakura.h">
+    <ClInclude Include="Source\AIRIS.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Source\Core\Events\IEventListener.hpp">

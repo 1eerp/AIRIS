@@ -14,8 +14,9 @@
     <VCProjectVersion>16.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
     <ProjectGuid>{85e5f67b-c1a6-47a0-aa5d-768171b91dd2}</ProjectGuid>
-    <RootNamespace>Sakura</RootNamespace>
+    <RootNamespace>AIRIS</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>AIRIS</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
@@ -127,7 +128,7 @@
     <ClInclude Include="Source\Core\Window.hpp" />
     <ClInclude Include="Source\Core\Application.hpp" />
     <ClInclude Include="Source\Utils\WinMessage.hpp" />
-    <ClInclude Include="Source\Sakura.h" />
+    <ClInclude Include="Source\AIRIS.h" />
     <ClInclude Include="Source\Util.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
