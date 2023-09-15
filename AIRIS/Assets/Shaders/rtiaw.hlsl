@@ -23,7 +23,9 @@ cbuffer RTCameraSD : register(b1)
 			CamDirection,
 			Pixel00Center,
 			PixelDeltaX,
-			PixelDeltaY;
+			PixelDeltaY,
+			LensDefocusX,
+			LensDefocusY;
 };
 
 // GEOMETRY AND MATERIAL BUFFERS
@@ -33,6 +35,11 @@ StructuredBuffer<RTMaterial> materials : register(t1);
 RWTexture2D<float4> OutputTex : register(u0);
 RWTexture2D<float4> AccumulatedTex : register(u1);
 
+////////////////////
+//				  //
+// COMPUTE SHADER //
+//				  //
+////////////////////
 
 [numthreads(256, 1, 1)]
 void CS( uint3 dispatchThreadID : SV_DispatchThreadID, uint3 dispatchGroupID : SV_GroupThreadID)
@@ -68,8 +75,9 @@ Ray GetRay(float u, float v, Camera cam)
     float3 pixelLoc = Pixel00Center + (u * PixelDeltaX + v * PixelDeltaY) + (PixelDeltaX * (GetRandomFloat() - 0.5f) + PixelDeltaY * (GetRandomFloat() - 0.5f));
 	
 	Ray r;
-	r.origin = cam.origin;
-	r.direction = normalize(pixelLoc - cam.origin);
+    float3 randOffset = RandomInUnitDisk();
+    r.origin = cam.origin + (LensDefocusX * randOffset.x) + (LensDefocusY * randOffset.y);
+	r.direction = normalize(pixelLoc - r.origin);
 	
 	return r;
 }

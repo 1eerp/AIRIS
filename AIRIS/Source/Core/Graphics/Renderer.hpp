@@ -118,7 +118,7 @@ private:
 	uint16_t								m_clientWidth,
 											m_clientHeight;
 
-	uint32_t								m_currentMaxSamples = 128;
+	uint32_t								m_currentMaxSamples = 512;
 	RTConstants								m_rtConstants{};
 	Scope<RTCamera>							m_camera;
 	std::vector<RTSphere>					m_spheres;

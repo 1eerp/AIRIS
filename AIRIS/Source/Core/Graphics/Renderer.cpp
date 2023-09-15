@@ -261,7 +261,15 @@ void RRenderer::Init()
 	FlushCommandQueue();
 
 	// Initialize Camera
-	m_camera = std::make_unique<RTCamera>(glm::vec3{ 13.f, 2.f, -3.f }, glm::vec3{ 0.f, 0.f, 0.f }, glm::vec3{ 0.f, 1.f, 0.f }, glm::ivec2{ m_clientWidth, m_clientHeight}, SWindow::GetInstance()->GetAspectRatio(), 20.f, 1.f);
+	m_camera = std::make_unique<RTCamera>(
+		glm::vec3{ 13.f, 2.f, -3.f },
+		glm::vec3{ 0.f, 0.f, 0.f },
+		glm::vec3{ 0.f, 1.f, 0.f },
+		glm::ivec2{ m_clientWidth, m_clientHeight},
+		SWindow::GetInstance()->GetAspectRatio(),
+		20.f,
+		10.f,
+		0.6f);
 
 }
 
