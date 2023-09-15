@@ -43,6 +43,7 @@ public:
 	virtual bool OnWindowResize(IEvent*) override;
 	virtual bool OnKeyDown(IEvent*) override;
 	virtual bool OnMouseWheel(IEvent*) override;
+	virtual bool OnMouseDown(IEvent*) override;
 
 private:
 	virtual void Init() override;
@@ -119,6 +120,7 @@ private:
 											m_clientHeight;
 
 	uint32_t								m_currentMaxSamples = 512;
+	uint8_t									m_mouseWheelMode = 0; // 0:fov, 1:focalDist, 2:defocusAngle
 	RTConstants								m_rtConstants{};
 	Scope<RTCamera>							m_camera;
 	std::vector<RTSphere>					m_spheres;

@@ -23,6 +23,7 @@ RRenderer::RRenderer(uint16_t width, uint16_t height)
 	EVENTSYSTEM->RegisterEventListener(EventType::WindowResize, dynamic_cast<IEventListener*>(this), reinterpret_cast<EventSystem::EventCallback>(&RRenderer::OnWindowResize));
 	EVENTSYSTEM->RegisterEventListener(EventType::KeyPressed, dynamic_cast<IEventListener*>(this), reinterpret_cast<EventSystem::EventCallback>(&RRenderer::OnKeyDown));
 	EVENTSYSTEM->RegisterEventListener(EventType::MouseScrolled, dynamic_cast<IEventListener*>(this), reinterpret_cast<EventSystem::EventCallback>(&RRenderer::OnMouseWheel));
+	EVENTSYSTEM->RegisterEventListener(EventType::MouseButtonPressed, dynamic_cast<IEventListener*>(this), reinterpret_cast<EventSystem::EventCallback>(&RRenderer::OnMouseDown));
 
 
 	CORE_INFO("Renderer Intialized");
@@ -146,7 +147,10 @@ void RRenderer::Draw()
 bool RRenderer::OnWindowResize(IEvent* e)
 {
 	WindowResizeEvent* event = dynamic_cast<WindowResizeEvent*>(e);
-	m_clientWidth = event->GetWidth(), m_clientHeight = event->GetHeight();
+	uint16_t clientWidth = event->GetWidth(), clientHeight = event->GetHeight();
+	//if (clientWidth == m_clientWidth && clientHeight == m_clientHeight)
+	//	return false;
+	m_clientWidth = clientWidth, m_clientHeight = clientHeight;
 	unsigned int xGroups = static_cast<unsigned int>(ceilf(m_clientWidth / 256.0f));
 	CORE_INFO("Resizing Buffers, Width: {}, Height: {}, X Dispatch Groups(256 warp size):{}", m_clientWidth, m_clientWidth, xGroups);
 	ResizeBuffers(m_clientWidth, m_clientHeight);
@@ -186,6 +190,12 @@ bool RRenderer::OnKeyDown(IEvent* e)
 			CORE_INFO("Ray Bounces: {}", m_rtConstants.MaxRayBounces);
 			break;
 		}
+		case KeyCode::Enter:
+		{
+			// List All Camera Information in console
+			CORE_INFO("{}", m_camera->GetInfo());
+			break;
+		}
 		default:
 			break;
 	}
@@ -196,10 +206,54 @@ bool RRenderer::OnKeyDown(IEvent* e)
 bool RRenderer::OnMouseWheel(IEvent* e)
 {
 	MouseScrolledEvent* scrollEvent = dynamic_cast<MouseScrolledEvent*>(e);
-	float delta = scrollEvent->GetScrollDelta() / 120.f;
-	float newFov = m_camera->GetFov() - delta * 5; // Negated based on my control preferences
-	if (newFov > 14 && newFov < 101)
-		m_camera->SetFov(newFov);
+	float delta = scrollEvent->GetScrollDelta() / 120.f; 
+
+	switch (m_mouseWheelMode)
+	{
+		case 0:
+		{
+			float newFov = m_camera->GetFov() - delta * 5; // Negated based on my control preferences
+			if (newFov > 9 && newFov < 101)
+				m_camera->SetFov(newFov);
+
+
+			break;
+		}
+		case 1:
+		{
+			float newFocalDist = m_camera->GetFocalDist() + delta * 1.f;
+			if (newFocalDist > .1f)
+				m_camera->SetFocalDist(newFocalDist);
+			break;
+		}
+		case 2:
+		{
+			float newDefocusAngle = m_camera->GetDefocusAngle() + delta * 0.1f;
+			if (newDefocusAngle > 0)
+				m_camera->SetDefocusAngle(newDefocusAngle);
+			break;
+		}
+	}
+	return false;
+}
+
+
+bool RRenderer::OnMouseDown(IEvent*e)
+{
+	MouseButtonPressedEvent* mouseEvent = dynamic_cast<MouseButtonPressedEvent*>(e);
+	
+	std::array<std::string, 3> mwheelModes = {"FOV", "FocalDist", "DefocusAngle"};
+	auto button = mouseEvent->GetMouseButton();
+	switch (button)
+	{
+		case MouseCode::MB2:
+		{
+			m_mouseWheelMode = (m_mouseWheelMode + 1) % 3;
+			CORE_INFO("Mouse Wheel Mode: {}", mwheelModes[m_mouseWheelMode]);
+			break;
+		}
+	}
+	
 	return false;
 }
 
@@ -416,13 +470,13 @@ void RRenderer::CreateObjects()
 	m_materials.push_back(sphereMaterial);
 	m_spheres.push_back({ {0.f, 1.f, 0.f}, 1.0f, static_cast<uint32_t>(m_materials.size() - 1) });
 
-
+	
 	sphereMaterial.Albedo = glm::vec3(randomFloat(), randomFloat(), randomFloat());
 	sphereMaterial.Roughness = 0.0f;
 	sphereMaterial.Type = Metal;
 	m_materials.push_back(sphereMaterial);
 	m_spheres.push_back({ {4.f, 1.f, 0.f}, 1.0f, static_cast<uint32_t>(m_materials.size() - 1) });
-
+	
 
 	sphereMaterial.Albedo = glm::vec3(randomFloat(), randomFloat(), randomFloat());
 	sphereMaterial.Roughness = randomFloat();
