@@ -24,7 +24,7 @@ A compute shader implmenetation of the first book from the ***Ray Tracing In A W
 
 ##### 512 Samples | 7 Bounces
 
-![Tux, the Linux mascot](Showcase/Compute-RTIAW512-7.png)
+![Tux, the Linux mascot](Showcase/DefocusBlur.png)
 
 ## Build
 
