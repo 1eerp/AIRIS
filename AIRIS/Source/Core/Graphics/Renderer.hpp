@@ -51,14 +51,13 @@ private:
 	void CreateSwapChain();
 	void CreateDescriptorHeaps();
 	void CreateObjects();
-	void CreateInputLayoutAndShaders();
+	void CreateShader();
 	void CreateRootSignatureAndPSOs();
 	void CreateConstantBuffers();
 	void ResizeBuffers(uint16_t width, uint16_t height);
 	void FlushCommandQueue();
 	ID3D12Resource* CurrentBackBuffer() const;
 	D3D12_CPU_DESCRIPTOR_HANDLE CurrentBackBufferView() const;
-	D3D12_CPU_DESCRIPTOR_HANDLE DepthStencilView() const;
 	D3D12_CPU_DESCRIPTOR_HANDLE ComputeTextureUAView() const;
 
 private:
@@ -78,8 +77,7 @@ private:
 
 	uint8_t									m_curBackBuffer = 0;
 	std::vector<ComPtr<ID3D12Resource>>		m_swapChainBuffers = std::vector<ComPtr<ID3D12Resource>>(DEFAULT_SWAPCHAINBUFFERCOUNT);
-	ComPtr<ID3D12Resource>					m_depthStencilBuffer,
-											m_computeOutputBuffer,
+	ComPtr<ID3D12Resource>					m_computeOutputBuffer,
 											m_computeAccumulateBuffer,
 											m_materialBuffer,
 											m_materialUploadBuffer,
@@ -90,27 +88,14 @@ private:
 	Scope<UploadBuffer<RTCameraSD>>			m_cameraConstantBuffer;
 
 	ComPtr<ID3D12DescriptorHeap>			m_rtvHeap,
-											m_dsvHeap,
 											m_srvHeap; // UAV, CBV
 
-
-
-	ComPtr<ID3DBlob>						m_vsByteCode = nullptr;
-	ComPtr<ID3DBlob>						m_psByteCode = nullptr;
 	ComPtr<ID3DBlob>						m_csByteCode = nullptr;
 
 	// ROOT SIGNATURE, INPUT_LAYOUT
-	ComPtr<ID3D12RootSignature>				m_opaqueRootSig = nullptr,
-											m_computeRootSig = nullptr;
+	ComPtr<ID3D12RootSignature>				m_computeRootSig = nullptr;
 
-	std::vector<D3D12_INPUT_ELEMENT_DESC>	m_inputLayout;
-	ComPtr<ID3D12PipelineState>				m_opaquePSO = nullptr,
-											m_computePSO = nullptr;
-
-	// MESH
-	Scope<Mesh>								m_mesh = nullptr;
-
-
+	ComPtr<ID3D12PipelineState>				m_computePSO = nullptr;
 
 	D3D12_VIEWPORT							m_viewport;
 	D3D12_RECT								m_scissorRect;
