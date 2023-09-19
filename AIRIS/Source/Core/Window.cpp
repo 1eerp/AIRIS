@@ -257,8 +257,10 @@ LRESULT CALLBACK SWindow::WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPA
         
         auto [x, y] = MAKEPOINTS(lParam);
 
-        INPUT->UpdateMBState(button, MouseButtonState::MBDown);
+
+        INPUT->UpdateMBState(button, MouseButtonState::MBUp);
         Ref<MouseButtonReleasedEvent> e = CreateRef<MouseButtonReleasedEvent>(button, x, y);
+
         EVENTSYSTEM->QueueEvent(e);
         break;
     }
