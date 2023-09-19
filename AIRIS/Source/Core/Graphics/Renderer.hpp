@@ -41,9 +41,6 @@ public:
 	virtual void Draw() override;
 
 	virtual bool OnWindowResize(IEvent*) override;
-	virtual bool OnKeyDown(IEvent*) override;
-	virtual bool OnMouseWheel(IEvent*) override;
-	virtual bool OnMouseDown(IEvent*) override;
 
 private:
 	virtual void Init() override;
@@ -58,7 +55,7 @@ private:
 	void FlushCommandQueue();
 	ID3D12Resource* CurrentBackBuffer() const;
 	D3D12_CPU_DESCRIPTOR_HANDLE CurrentBackBufferView() const;
-	D3D12_CPU_DESCRIPTOR_HANDLE ComputeTextureUAView() const;
+	D3D12_CPU_DESCRIPTOR_HANDLE DepthStencilView() const;
 
 private:
 	API_CONFIG								m_config;
@@ -77,25 +74,19 @@ private:
 
 	uint8_t									m_curBackBuffer = 0;
 	std::vector<ComPtr<ID3D12Resource>>		m_swapChainBuffers = std::vector<ComPtr<ID3D12Resource>>(DEFAULT_SWAPCHAINBUFFERCOUNT);
-	ComPtr<ID3D12Resource>					m_computeOutputBuffer,
-											m_computeAccumulateBuffer,
-											m_materialBuffer,
-											m_materialUploadBuffer,
-											m_sphereBuffer,
-											m_sphereUploadBuffer;
-
-	Scope<UploadBuffer<RTConstants>>		m_rtConstantBuffer;
-	Scope<UploadBuffer<RTCameraSD>>			m_cameraConstantBuffer;
+	ComPtr<ID3D12Resource>					m_depthStencilBuffer;
 
 	ComPtr<ID3D12DescriptorHeap>			m_rtvHeap,
-											m_srvHeap; // UAV, CBV
+											m_dsvHeap,
+											m_srvHeap; // CBV
 
-	ComPtr<ID3DBlob>						m_csByteCode = nullptr;
+	ComPtr<ID3DBlob>						m_vsByteCode = nullptr,
+											m_psByteCode = nullptr;
 
 	// ROOT SIGNATURE, INPUT_LAYOUT
-	ComPtr<ID3D12RootSignature>				m_computeRootSig = nullptr;
-
-	ComPtr<ID3D12PipelineState>				m_computePSO = nullptr;
+	ComPtr<ID3D12RootSignature>				m_opaqueRootSig = nullptr;
+	std::vector<D3D12_INPUT_ELEMENT_DESC>	m_inputLayout;
+	ComPtr<ID3D12PipelineState>				m_PSO = nullptr;
 
 	D3D12_VIEWPORT							m_viewport;
 	D3D12_RECT								m_scissorRect;
@@ -104,10 +95,5 @@ private:
 	uint16_t								m_clientWidth,
 											m_clientHeight;
 
-	uint32_t								m_currentMaxSamples = 512;
-	uint8_t									m_mouseWheelMode = 0; // 0:fov, 1:focalDist, 2:defocusAngle
-	RTConstants								m_rtConstants{};
-	Scope<RTCamera>							m_camera;
-	std::vector<RTSphere>					m_spheres;
-	std::vector<RTMaterial>					m_materials;
+	std::unique_ptr<Mesh>					m_mesh = nullptr;
 };

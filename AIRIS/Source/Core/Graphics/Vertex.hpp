@@ -1,8 +1,8 @@
-#include "Core/API/RendererAPI.hpp"
+#include "glm/glm.hpp"
 
 
 struct Vertex
 {
-	DirectX::XMFLOAT3 Position;
-	DirectX::XMFLOAT4 Color;
+	glm::vec3 Position;
+	glm::vec4 Color;
 };
