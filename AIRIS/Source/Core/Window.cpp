@@ -99,7 +99,7 @@ LRESULT CALLBACK SWindow::WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 
     case WM_DESTROY:
     {
-        ref<WindowCloseEvent> e = CreateRef<WindowCloseEvent>();
+        Ref<WindowCloseEvent> e = CreateRef<WindowCloseEvent>();
         EVENTSYSTEM->QueueEvent(e);
 
         PostQuitMessage(0);
@@ -117,7 +117,7 @@ LRESULT CALLBACK SWindow::WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPA
     case WM_EXITSIZEMOVE:
     {
         SWindow::GetInstance()->SetResizing(false);
-        ref<WindowResizeEvent> e = CreateRef<WindowResizeEvent>(mainWindow->GetWidth(), mainWindow->GetHeight());
+        Ref<WindowResizeEvent> e = CreateRef<WindowResizeEvent>(mainWindow->GetWidth(), mainWindow->GetHeight());
         EVENTSYSTEM->QueueEvent(e);
         break;
     }
@@ -155,7 +155,7 @@ LRESULT CALLBACK SWindow::WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 
         if (ShouldResize)
         {
-            ref<WindowResizeEvent> e = CreateRef<WindowResizeEvent>(WindowWidth, WindowHeight);
+            Ref<WindowResizeEvent> e = CreateRef<WindowResizeEvent>(WindowWidth, WindowHeight);
             EVENTSYSTEM->QueueEvent(e);
         }
         break;
@@ -181,12 +181,12 @@ LRESULT CALLBACK SWindow::WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 
         if (!action)
         {
-            ref<KeyReleasedEvent> e = CreateRef<KeyReleasedEvent>(key);
+            Ref<KeyReleasedEvent> e = CreateRef<KeyReleasedEvent>(key);
             EVENTSYSTEM->QueueEvent(e);
         }
         else if (action && !repeat)
         {
-            ref<KeyPressedEvent> e = CreateRef<KeyPressedEvent>(key, repeat);
+            Ref<KeyPressedEvent> e = CreateRef<KeyPressedEvent>(key, repeat);
             EVENTSYSTEM->QueueEvent(e);
         }
 
@@ -199,7 +199,7 @@ LRESULT CALLBACK SWindow::WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPA
         // Need to refactor Input System
         InputCode::KeyCode keycode = InputCode::KeyCode::A;
         // TODO: Refactor KeyTypedEvent event and rename it
-        ref<KeyTypedEvent> e = CreateRef<KeyTypedEvent>(keycode, static_cast<char>(wParam));
+        Ref<KeyTypedEvent> e = CreateRef<KeyTypedEvent>(keycode, static_cast<char>(wParam));
         EVENTSYSTEM->QueueEvent(e);
         break;
     }
@@ -215,7 +215,7 @@ LRESULT CALLBACK SWindow::WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPA
             break;
 
         INPUT->UpdateMousePos(x, y);
-        ref<MouseMovedEvent> e = CreateRef<MouseMovedEvent>(x, y);
+        Ref<MouseMovedEvent> e = CreateRef<MouseMovedEvent>(x, y);
         EVENTSYSTEM->QueueEvent(e);
 
         break;
@@ -236,7 +236,7 @@ LRESULT CALLBACK SWindow::WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPA
         auto [x, y] = MAKEPOINTS(lParam);
 
         INPUT->UpdateMBState(button, MouseButtonState::MBDown);
-        ref<MouseButtonPressedEvent> e = CreateRef<MouseButtonPressedEvent>(button, x, y);
+        Ref<MouseButtonPressedEvent> e = CreateRef<MouseButtonPressedEvent>(button, x, y);
         EVENTSYSTEM->QueueEvent(e);
 
         // TODO: Update Input 
@@ -257,8 +257,10 @@ LRESULT CALLBACK SWindow::WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPA
         
         auto [x, y] = MAKEPOINTS(lParam);
 
+
         INPUT->UpdateMBState(button, MouseButtonState::MBUp);
-        ref<MouseButtonReleasedEvent> e = CreateRef<MouseButtonReleasedEvent>(button, x, y);
+        Ref<MouseButtonReleasedEvent> e = CreateRef<MouseButtonReleasedEvent>(button, x, y);
+
         EVENTSYSTEM->QueueEvent(e);
         break;
     }
@@ -277,7 +279,7 @@ LRESULT CALLBACK SWindow::WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 
         auto [x, y] = MAKEPOINTS(lParam);
 
-        ref<MouseDoubleClickEvent> e = CreateRef<MouseDoubleClickEvent>(button, x, y);
+        Ref<MouseDoubleClickEvent> e = CreateRef<MouseDoubleClickEvent>(button, x, y);
         EVENTSYSTEM->QueueEvent(e);
         break;
     }
@@ -288,7 +290,7 @@ LRESULT CALLBACK SWindow::WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 
         auto [x, y] = MAKEPOINTS(lParam);
 
-        ref<MouseScrolledEvent> e = CreateRef<MouseScrolledEvent>(delta, x, y);
+        Ref<MouseScrolledEvent> e = CreateRef<MouseScrolledEvent>(delta, x, y);
         EVENTSYSTEM->QueueEvent(e);
     }
     break;

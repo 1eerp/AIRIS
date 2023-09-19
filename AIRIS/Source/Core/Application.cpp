@@ -4,12 +4,13 @@
 #include "Core/Window.hpp"
 #include "Events/EventSystem.hpp"
 #include "Input/Input.hpp"
+#include "Core/Timer.hpp"
 
 
 SApp* SApp::s_appInstance;
 
 SApp::SApp(SWindow* mainWindow)
-	:m_mainWindow(mainWindow), m_renderer(mainWindow->GetWidth(), mainWindow->GetHeight())
+	:m_mainWindow(mainWindow)
 {
 	assert(!s_appInstance && "Attempted to instantiate multiple application!");
 	s_appInstance = this;
@@ -20,6 +21,7 @@ SApp::SApp(SWindow* mainWindow)
 
 
 	// Todo: Initialize RenderAPI
+	m_renderer = CreateScope<RRenderer>(mainWindow->GetWidth(), mainWindow->GetHeight());
 
 }
 
@@ -56,6 +58,6 @@ void SApp::Update()
 {
 	m_mainWindow->PumpMessages();
 	EventSystem::GetGInstance()->ProcessEvents();
-	m_renderer.Draw();
+	m_renderer->Update();
 }
 

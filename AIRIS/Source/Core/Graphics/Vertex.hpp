@@ -1,9 +1,8 @@
 #include "Core/API/RendererAPI.hpp"
 
-using namespace DirectX;
 
 struct Vertex
 {
-	XMFLOAT3 Position;
-	XMFLOAT4 Color;
+	DirectX::XMFLOAT3 Position;
+	DirectX::XMFLOAT4 Color;
 };
