@@ -372,7 +372,7 @@ void RRenderer::CreateDescriptorHeaps()
 
 void RRenderer::CreateShader()
 {
-	m_csByteCode = SCompileShader(L"Assets\\Shaders\\rtiaw.hlsl", nullptr, "CS", "cs_5_0");
+	m_csByteCode = SCompileShader(L"../../Assets\\Shaders\\rtiaw.hlsl", nullptr, "CS", "cs_5_0");
 }
 
 void RRenderer::CreateObjects()
