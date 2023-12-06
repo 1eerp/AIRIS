@@ -41,6 +41,10 @@ public:
 	virtual void Draw() override;
 
 	virtual bool OnWindowResize(IEvent*) override;
+	virtual bool OnKeyDown(IEvent* e) override;
+	virtual bool OnMouseDown(IEvent* e) override;
+	virtual bool OnMouseWheel(IEvent* e) override;
+
 
 private:
 	virtual void Init() override;

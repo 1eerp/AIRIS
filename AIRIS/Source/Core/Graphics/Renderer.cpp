@@ -4,6 +4,7 @@
 #include "Core/Events/ApplicationEvents.hpp"
 #include "Core/Events/InputEvents.h"
 #include "Core/Input/Input.hpp"
+#include <random>
 
 
 ComPtr<ID3DBlob> SCompileShader(const std::wstring& filename, const D3D_SHADER_MACRO* defines, const std::string& entrypoint, const std::string& target);
@@ -20,6 +21,10 @@ RRenderer::RRenderer(uint16_t width, uint16_t height)
 		DebugBreak();
 	}
 	EVENTSYSTEM->RegisterEventListener(EventType::WindowResize, dynamic_cast<IEventListener*>(this), reinterpret_cast<EventSystem::EventCallback>(&RRenderer::OnWindowResize));
+	EVENTSYSTEM->RegisterEventListener(EventType::KeyPressed, dynamic_cast<IEventListener*>(this), reinterpret_cast<EventSystem::EventCallback>(&RRenderer::OnKeyDown));
+	EVENTSYSTEM->RegisterEventListener(EventType::MouseScrolled, dynamic_cast<IEventListener*>(this), reinterpret_cast<EventSystem::EventCallback>(&RRenderer::OnMouseWheel));
+	EVENTSYSTEM->RegisterEventListener(EventType::MouseButtonPressed, dynamic_cast<IEventListener*>(this), reinterpret_cast<EventSystem::EventCallback>(&RRenderer::OnMouseDown));
+
 
 	CORE_INFO("Renderer Intialized");
 }
@@ -32,6 +37,7 @@ RRenderer::~RRenderer()
 
 void RRenderer::Update()
 {
+
 	Draw();
 }
 
@@ -93,6 +99,36 @@ bool RRenderer::OnWindowResize(IEvent* e)
 	return false;
 }
 
+bool RRenderer::OnKeyDown(IEvent* e)
+{
+	KeyPressedEvent* event = dynamic_cast<KeyPressedEvent*>(e);
+	switch (event->GetKeyCode())
+	{
+		default:
+			break;
+	}
+	
+	return false;
+}
+
+bool RRenderer::OnMouseWheel(IEvent* e)
+{
+	MouseScrolledEvent* scrollEvent = dynamic_cast<MouseScrolledEvent*>(e);
+	float delta = scrollEvent->GetScrollDelta() / 120.f; 
+	
+	return false;
+}
+
+
+bool RRenderer::OnMouseDown(IEvent*e)
+{
+	MouseButtonPressedEvent* mouseEvent = dynamic_cast<MouseButtonPressedEvent*>(e);
+	
+	std::array<std::string, 3> mwheelModes = {"FOV", "FocalDist", "DefocusAngle"};
+	auto button = mouseEvent->GetMouseButton();
+	
+	return false;
+}
 
 void RRenderer::Init()
 {
@@ -210,8 +246,8 @@ void RRenderer::CreateDescriptorHeaps()
 
 void RRenderer::CreateShader()
 {
-	m_vsByteCode = SCompileShader(L"Assets\\Shaders\\color.hlsl", nullptr, "VS", "vs_5_0");
-	m_psByteCode = SCompileShader(L"Assets\\Shaders\\color.hlsl", nullptr, "PS", "ps_5_0");
+	m_vsByteCode = SCompileShader(L"..\\..\\Assets\\Shaders\\color.hlsl", nullptr, "VS", "vs_5_0");
+	m_psByteCode = SCompileShader(L"..\\..\\Assets\\Shaders\\color.hlsl", nullptr, "PS", "ps_5_0");
 }
 
 void RRenderer::CreateObjects()
