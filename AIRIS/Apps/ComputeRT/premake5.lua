@@ -9,7 +9,10 @@ project "ComputeRT"
 
 	files
 	{
-		"main.cpp"
+		"main.cpp",
+		"**.h",
+		"**.hpp",
+		"**.cpp",
 	}
 
 	includedirs
