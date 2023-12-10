@@ -12,8 +12,10 @@ project "AIRIS"
 		"*.h",
 		"*.hpp",
 		"Core/**.h",
+		"Core/**.hpp",
 		"Core/**.cpp",
 		"Utils/**.h",
+		"Utils/**.hpp",
 		"Utils/**.cpp",
 
 	}
