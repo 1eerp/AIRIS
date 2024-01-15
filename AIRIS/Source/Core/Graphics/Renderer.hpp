@@ -4,8 +4,9 @@
 #include "Core/Window.hpp"
 #include "Core/API/RendererAPI.hpp"
 #include "Mesh.hpp"
-#include "Camera.hpp"
+#include "CameraController.hpp"
 #include "RTHelper.hpp"
+#include "Vertex.hpp"
 using Microsoft::WRL::ComPtr;
 
 
@@ -79,6 +80,7 @@ private:
 	uint8_t									m_curBackBuffer = 0;
 	std::vector<ComPtr<ID3D12Resource>>		m_swapChainBuffers = std::vector<ComPtr<ID3D12Resource>>(DEFAULT_SWAPCHAINBUFFERCOUNT);
 	ComPtr<ID3D12Resource>					m_depthStencilBuffer;
+	Ref<UploadBuffer<ConstantBuffer>>		m_constantBuffer;
 
 	ComPtr<ID3D12DescriptorHeap>			m_rtvHeap,
 											m_dsvHeap,
@@ -100,4 +102,9 @@ private:
 											m_clientHeight;
 
 	std::unique_ptr<Mesh>					m_mesh = nullptr;
+	ConstantBuffer							m_matricesBuffer;
+	glm::vec3								m_meshPos = {0.f, 0.f, 0.f};
+
+	// EDITOR CAMERA CONTROLLER
+	EditorCC								m_controller;
 };

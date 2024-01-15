@@ -4,10 +4,6 @@
 #include <d3dcompiler.h>
 #include <dxgi1_6.h>
 #include <d3d12.h>
-#include <DirectXMath.h>
-#include <DirectXPackedVector.h>
-#include <DirectXColors.h>
-#include <DirectXCollision.h>
 
 
 // From official microsoft helper repo

@@ -98,3 +98,120 @@ RTCameraSD RTCamera::GetShaderData()
 	// Initalize Structure
 	return m_shaderData;
 }
+
+
+
+Camera::Camera(glm::vec3 position, float aspectRatio, float fov)
+{
+	m_transform.Position = position;
+	m_camSpec.AspectRatio = aspectRatio;
+	m_camSpec.FOV = fov;
+
+	UpdateShaderData();
+}
+
+Camera::Camera(const Transform& transform, const CameraSpec& spec)
+	: m_transform(transform), m_camSpec(spec)
+{
+	UpdateShaderData();
+}
+
+
+void Camera::UpdateBasisVectors()
+{
+	auto inv = glm::inverse(m_transform.Orientation);
+	m_transform.Forward = inv * glm::vec3(0.f, 0.f, 1.f);
+	m_transform.Up = inv * glm::vec3(0.f, 1.f, 0.f);
+	m_transform.Right = inv * glm::vec3(1.f, 0.f, 0.f);
+}
+
+void Camera::UpdateFov(float deltaFov)
+{
+	m_camSpec.FOV += deltaFov;
+	m_requiresUpdate = true;
+}
+
+void Camera::UpdatePos(glm::vec3 deltaPos)
+{
+	m_transform.Position += deltaPos;
+	m_requiresUpdate = true;
+}
+
+void Camera::SetProjectionType(ProjectionType type)
+{
+	m_camSpec.Type = type;
+	m_requiresUpdate = true;
+}
+
+void Camera::SetPosition(glm::vec3 position)
+{
+	m_transform.Position = position;
+	m_requiresUpdate = true;
+}
+
+void Camera::SetFov(float fov)
+{
+	m_camSpec.FOV = fov;
+	m_requiresUpdate = true;
+}
+
+void Camera::SetAspectRatio(float ar)
+{
+	m_camSpec.AspectRatio = ar;
+	m_requiresUpdate = true;
+}
+
+void Camera::SetNearPlane(float nearPlane)
+{
+	m_camSpec.Near = nearPlane;
+	m_requiresUpdate = true;
+}
+
+void Camera::SetFarPlane(float farPlane)
+{
+	m_camSpec.Far = farPlane;
+	m_requiresUpdate = true;
+}
+
+void Camera::UpdateOrientation(float yaw, float pitch, float roll)
+{
+	UpdateOrientation({ pitch, yaw, roll });
+}
+
+void Camera::UpdateOrientation(const glm::vec3& eulerAngles)
+{
+	m_transform.Orientation = glm::quat(-eulerAngles) * m_transform.Orientation;
+	UpdateBasisVectors();
+	m_requiresUpdate = true;
+}
+
+void Camera::SetOrientation(float yaw, float pitch, float roll)
+{
+	glm::quat qPitch = glm::angleAxis(-pitch, glm::vec3(1, 0, 0));
+	glm::quat qYaw = glm::angleAxis(-yaw, glm::vec3(0, 1, 0));
+	glm::quat qRoll = glm::angleAxis(-roll, glm::vec3(0, 0, 1));
+
+	m_transform.Orientation = qRoll * qPitch * qYaw;
+	UpdateBasisVectors();
+	m_requiresUpdate = true;
+}
+
+void Camera::UpdateShaderData()
+{
+	if (!m_requiresUpdate)
+		return;
+
+	const float & ar = m_camSpec.AspectRatio;
+
+	if (m_camSpec.Type == ProjectionType::Orothographic)
+	{
+		const float hs = (0.5f * m_camSpec.Size);
+		m_gpuData.ProjMatrix = glm::ortho(-hs * ar, hs * ar, -hs, hs);
+	}
+	else
+		m_gpuData.ProjMatrix = glm::perspective(m_camSpec.FOV, ar, m_camSpec.Near, m_camSpec.Far);
+
+	m_gpuData.ViewMatrix = glm::mat4_cast(m_transform.Orientation) * glm::translate(glm::mat4(1.0f), -m_transform.Position);
+
+	m_requiresUpdate = false;
+}

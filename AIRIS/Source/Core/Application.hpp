@@ -22,6 +22,7 @@ public:
 private:
 	virtual bool OnWindowClose(IEvent* event) override;
 	virtual bool OnWindowResize(IEvent* event) override;
+	virtual bool OnKeyDown(IEvent* event) override;
 
 
 public:

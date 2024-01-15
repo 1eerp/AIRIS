@@ -1,5 +1,7 @@
 #pragma once
 #include "glm/glm.hpp"
+#include "glm/gtc/matrix_transform.hpp"
+#include "glm/gtx/quaternion.hpp"
 #include <string>
 
 // TODO: Get rid of pads by packing the values in matrices
@@ -69,4 +71,90 @@ private:
 						m_up;
 
 	RTCameraSD			m_shaderData;
+};
+
+
+
+struct GPUCameraMatrices
+{
+	glm::mat4 ViewMatrix;
+	glm::mat4 ProjMatrix;
+};
+
+struct Transform
+{
+	glm::vec3 Scale = { 1.f, 1.f, 1.f };
+	glm::vec3 Position = { 0.f, 0.f, 0.f };
+	glm::quat Orientation = { 1.f, 0.f, 0.f, 0.f };
+
+	glm::vec3 Forward = { 0.f, 0.f, 1.f };
+	glm::vec3 Up = { 0.f, 1.f, 0.f };
+	glm::vec3 Right = { 1.f, 0.f, 0.f };
+};
+
+enum class ProjectionType
+{
+	Orothographic,
+	Perspective
+};
+
+struct CameraSpec
+{
+	ProjectionType Type = ProjectionType::Perspective;
+	union
+	{
+		float FOV = glm::radians(45.f); // Perspective
+		float Size; // Orthographic
+	};
+	float	AspectRatio = 16.f / 9.f,
+		Near = 0.01f,
+		Far = 1000.f;
+};
+
+
+
+// Normal Camera
+class Camera
+{
+public:
+
+	Camera(glm::vec3 position = { 0.f, 5.f, -20.f }, float aspectRatio = 16.f / 9.f, float fov = glm::radians(45.f));
+	Camera(const Transform& transform, const CameraSpec& spec);
+
+	inline const glm::vec3&	GetPosition() { return m_transform.Position; }
+	inline const glm::vec3&	GetForwardDir() { return m_transform.Forward; }
+	inline const glm::vec3&	GetUpDir() { return m_transform.Up; }
+	inline const glm::vec3&	GetRightDir() { return m_transform.Right; }
+	inline float		GetFov() { return m_camSpec.FOV; }
+	inline float		GetAspectRatio() { return m_camSpec.AspectRatio; }
+	inline float		GetSize() { return m_camSpec.Size; }
+	inline bool			RequiresUpdate() { return m_requiresUpdate; }
+
+	inline const glm::mat4&	GetViewMatrix() { return m_gpuData.ViewMatrix; }
+	inline const glm::mat4&	GetProjMatrix() { return m_gpuData.ProjMatrix; }
+
+	void UpdatePos(glm::vec3 deltaPos);
+	void UpdateFov(float deltaFov);
+	void UpdateOrientation(const glm::vec3& eulerAngles); 
+	void UpdateOrientation(float yaw, float pitch = 0.f, float roll = 0.f);
+
+	void SetProjectionType(ProjectionType type);
+	void SetPosition(glm::vec3	position);
+	void SetFov(float fov);
+	void SetAspectRatio(float ar);
+	void SetNearPlane(float nearPlane);
+	void SetFarPlane(float farPlane);
+	void SetOrientation(float yaw, float pitch = 0.f, float roll = 0.f);
+
+
+	void UpdateShaderData();
+
+private:
+	void UpdateBasisVectors();
+
+
+	Transform m_transform;
+	CameraSpec m_camSpec;
+	GPUCameraMatrices m_gpuData;
+	bool m_requiresUpdate;
 };

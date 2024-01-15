@@ -10,12 +10,20 @@ struct VertexOut
     float4 Color : COLOR;
 };
 
+cbuffer CBPerObject : register(b0)
+{
+    float4x4 Model;
+    float4x4 View;
+    float4x4 Proj;
+    float4x4 MVP;
+}
+
 VertexOut VS(VertexIn vin)
 {
     VertexOut vout;
 	
 	// Transform to homogeneous clip space.
-    vout.PosS = float4(vin.PosL, 1.0f);
+    vout.PosS = mul(MVP, float4(vin.PosL, 1.0f));
 	
 	// Just pass vertex color into the pixel shader.
     vout.Color = vin.Color;

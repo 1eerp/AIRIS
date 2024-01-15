@@ -3,6 +3,7 @@
 #include "Input/Input.hpp"
 #include "Core/Window.hpp"
 #include "Events/EventSystem.hpp"
+#include "Events/InputEvents.h"
 #include "Input/Input.hpp"
 #include "Core/Timer.hpp"
 
@@ -18,6 +19,7 @@ SApp::SApp(SWindow* mainWindow)
 	// REGISTER EVENTS in the event system.
 	EVENTSYSTEM->RegisterEventListener(EventType::WindowClose, this, reinterpret_cast<EventSystem::EventCallback>(&SApp::OnWindowClose));
 	EVENTSYSTEM->RegisterEventListener(EventType::WindowResize, this, reinterpret_cast<EventSystem::EventCallback>(&SApp::OnWindowResize));
+	EVENTSYSTEM->RegisterEventListener(EventType::KeyPressed, this, reinterpret_cast<EventSystem::EventCallback>(&SApp::OnKeyDown));
 
 
 	// Todo: Initialize RenderAPI
@@ -39,6 +41,22 @@ bool SApp::OnWindowClose(IEvent* event)
 
 bool SApp::OnWindowResize(IEvent* event)
 {
+	return false;
+}
+
+bool SApp::OnKeyDown(IEvent* event)
+{
+	KeyCode key = dynamic_cast<KeyPressedEvent*>(event)->GetKeyCode();
+	switch (key)
+	{
+	case KeyCode::Escape:
+	{
+		m_running = false;
+		break;
+	}
+	default:
+		break;
+	}
 	return false;
 }
 

@@ -20,10 +20,10 @@ RRenderer::RRenderer(uint16_t width, uint16_t height)
 		CORE_ERROR(e.what());
 		DebugBreak();
 	}
-	EVENTSYSTEM->RegisterEventListener(EventType::WindowResize, dynamic_cast<IEventListener*>(this), reinterpret_cast<EventSystem::EventCallback>(&RRenderer::OnWindowResize));
-	EVENTSYSTEM->RegisterEventListener(EventType::KeyPressed, dynamic_cast<IEventListener*>(this), reinterpret_cast<EventSystem::EventCallback>(&RRenderer::OnKeyDown));
-	EVENTSYSTEM->RegisterEventListener(EventType::MouseScrolled, dynamic_cast<IEventListener*>(this), reinterpret_cast<EventSystem::EventCallback>(&RRenderer::OnMouseWheel));
-	EVENTSYSTEM->RegisterEventListener(EventType::MouseButtonPressed, dynamic_cast<IEventListener*>(this), reinterpret_cast<EventSystem::EventCallback>(&RRenderer::OnMouseDown));
+	EVENTSYSTEM->RegisterEventListener(EventType::WindowResize, this, reinterpret_cast<EventSystem::EventCallback>(&RRenderer::OnWindowResize));
+	EVENTSYSTEM->RegisterEventListener(EventType::KeyPressed, this, reinterpret_cast<EventSystem::EventCallback>(&RRenderer::OnKeyDown));
+	EVENTSYSTEM->RegisterEventListener(EventType::MouseScrolled, this, reinterpret_cast<EventSystem::EventCallback>(&RRenderer::OnMouseWheel));
+	EVENTSYSTEM->RegisterEventListener(EventType::MouseButtonPressed, this, reinterpret_cast<EventSystem::EventCallback>(&RRenderer::OnMouseDown));
 
 
 	CORE_INFO("Renderer Intialized");
@@ -37,26 +37,54 @@ RRenderer::~RRenderer()
 
 void RRenderer::Update()
 {
+	// TODO: CREATE TIME CLASS AND REMOVE THIS
+	static std::chrono::steady_clock::time_point lastTime;
+	std::chrono::steady_clock::time_point curTime = std::chrono::high_resolution_clock::now();
+	float timeInSec = static_cast<float>(std::chrono::duration_cast<std::chrono::nanoseconds>(curTime - lastTime).count()) / 1e9;
+	lastTime = curTime;
+	
+	// Controller updates camera
+	m_controller.Update(timeInSec);
+	
+	Ref<Camera> cam = m_controller.GetCamera();
+	
+	// UPDATE VIEW PROJ MATRICES
+	m_matricesBuffer.View = cam->GetViewMatrix();
+	m_matricesBuffer.Proj = cam->GetProjMatrix();
+	m_matricesBuffer.MVP = m_matricesBuffer.Proj * m_matricesBuffer.View;
 
+	// UPLOAD MATRICES
+	m_constantBuffer->CopyData(0, m_matricesBuffer);
+
+	// DRAW
 	Draw();
 }
 
 void RRenderer::Draw()
 {
+	// Get Current Render Target and Depth buffer views
 	D3D12_CPU_DESCRIPTOR_HANDLE rtv = CurrentBackBufferView();
 	D3D12_CPU_DESCRIPTOR_HANDLE dsv = m_dsvHeap->GetCPUDescriptorHandleForHeapStart();
 
+	// Reset Command Allocators and command Lists
 	ThrowIfFailed(m_cmdAlloc->Reset());
 	ThrowIfFailed(m_cmdList->Reset(m_cmdAlloc.Get(), m_PSO.Get()));
 
+	// Set Viewports
 	m_cmdList->RSSetViewports(1, &m_viewport);
 	m_cmdList->RSSetScissorRects(1, &m_scissorRect);
+
+	// 
 	D3D12_RESOURCE_BARRIER b = CD3DX12_RESOURCE_BARRIER::Transition(m_swapChainBuffers[m_curBackBuffer].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 	m_cmdList->ResourceBarrier(1, &b);
 	const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
 	m_cmdList->ClearRenderTargetView(rtv, clearColor, 0, nullptr);
 	m_cmdList->ClearDepthStencilView(m_dsvHeap->GetCPUDescriptorHandleForHeapStart(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
 	m_cmdList->OMSetRenderTargets(1, &rtv, true, &dsv);
+
+	ID3D12DescriptorHeap* descriptorHeaps[] = { m_srvHeap.Get() };
+	m_cmdList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
+
 	m_cmdList->SetGraphicsRootSignature(m_opaqueRootSig.Get());
 
 	D3D12_VERTEX_BUFFER_VIEW views[1] = { m_mesh->VertexBufferView() };
@@ -65,7 +93,9 @@ void RRenderer::Draw()
 	m_cmdList->IASetIndexBuffer(&ibv);
 	m_cmdList->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-	auto& m = m_mesh->m_subMeshes["Triangle"];
+	m_cmdList->SetGraphicsRootDescriptorTable(0, m_srvHeap->GetGPUDescriptorHandleForHeapStart());
+
+	auto& m = m_mesh->m_subMeshes["Square"];
 	m_cmdList->DrawIndexedInstanced(m.IndexCount, 1, m.StartIndexLocation, m.BaseVertexLocation, 0);
 	D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_swapChainBuffers[m_curBackBuffer].Get(),
 		D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
@@ -102,10 +132,15 @@ bool RRenderer::OnWindowResize(IEvent* e)
 bool RRenderer::OnKeyDown(IEvent* e)
 {
 	KeyPressedEvent* event = dynamic_cast<KeyPressedEvent*>(e);
+
 	switch (event->GetKeyCode())
 	{
-		default:
-			break;
+	case KeyCode::Enter:
+	{
+		break;
+	}
+	default:
+		break;
 	}
 	
 	return false;
@@ -123,8 +158,7 @@ bool RRenderer::OnMouseWheel(IEvent* e)
 bool RRenderer::OnMouseDown(IEvent*e)
 {
 	MouseButtonPressedEvent* mouseEvent = dynamic_cast<MouseButtonPressedEvent*>(e);
-	
-	std::array<std::string, 3> mwheelModes = {"FOV", "FocalDist", "DefocusAngle"};
+
 	auto button = mouseEvent->GetMouseButton();
 	
 	return false;
@@ -252,27 +286,53 @@ void RRenderer::CreateShader()
 
 void RRenderer::CreateObjects()
 {
-	auto aspectRatio = SWindow::GetInstance()->GetAspectRatio();
-	std::vector<Vertex> vertices(3);
-	vertices =
+	std::vector<Vertex> vertices =
 	{
-		Vertex({ glm::vec3(0.0f, 0.25f * aspectRatio, 0.0f), glm::vec4(1.f, 0.f, 0.f, 1.f)}),
-		Vertex({ glm::vec3(0.25f, -0.25f * aspectRatio, 0.0f), glm::vec4(0.f, 1.f, 0.f, 1.f)}),
-		Vertex({ glm::vec3(-0.25f, -0.25f * aspectRatio, 0.0f), glm::vec4(0.f, 0.f, 1.f, 1.f)}),
+		{{-0.5f, -0.5f, 0.0f},	{0.f, 1.f, 0.f, 1.f}}, //FBL 0
+		{{-0.5f, 0.5f, 0.0f},	{0.f, 0.f, 1.f, 1.f}}, //FTL 1
+		{{0.5f, 0.5f, 0.0f},	{1.f, 0.f, 0.f, 1.f}}, //FTR 2
+		{{0.5f, -0.5f, 0.0f},	{1.f, 0.f, 0.f, 1.f}}, //FBR 3
+		{{-0.5f, -0.5f, 1.0f},	{0.f, 0.f, 1.f, 1.f}}, //BBL 4
+		{{-0.5f, 0.5f, 1.0f},	{1.f, 0.f, 0.f, 1.f}}, //BTL 5
+		{{0.5f, 0.5f, 1.0f},	{0.f, 1.f, 0.f, 1.f}}, //BTR 6
+		{{0.5f, -0.5f, 1.0f},	{0.f, 1.f, 0.f, 1.f}}, //BBR 7
 	};
 
 	std::vector<std::uint16_t> indices =
 	{
-		0,1,2
+		// Front
+		0,1,2,
+		2,3,0,
+
+		// Back
+		7,6,5,
+		5,4,7,
+
+		// Left
+		4,5,1,
+		1,0,4,
+
+		// Right
+		3,2,6,
+		6,7,3,
+
+		// Top
+		1,5,6,
+		6,2,1,
+
+		// Bottom
+		3,7,4,
+		4,0,3
+
 	};
 	m_mesh = std::make_unique<Mesh>(m_device.Get(), m_cmdList.Get(), vertices, indices);
-	m_mesh->m_name = "TriangleMesh";
+	m_mesh->m_name = "Square";
 
 	SubMesh sm;
 	sm.BaseVertexLocation = 0;
 	sm.StartIndexLocation = 0;
 	sm.IndexCount = static_cast<uint32_t>(indices.size());
-	m_mesh->m_subMeshes["Triangle"] = sm;
+	m_mesh->m_subMeshes["Square"] = sm;
 }
 
 void RRenderer::CreateRootSignatureAndPSOs()
@@ -326,7 +386,17 @@ void RRenderer::CreateRootSignatureAndPSOs()
 
 void RRenderer::CreateConstantBuffers()
 {
+	m_constantBuffer = CreateRef<UploadBuffer<ConstantBuffer>>(m_device.Get(), 1, true);
 
+	UINT objCBByteSize = CalcConstantBufferByteSize(sizeof(ConstantBuffer));
+
+	// Address to start of the buffer (0th constant buffer).
+	D3D12_GPU_VIRTUAL_ADDRESS cbAddress = m_constantBuffer->Resource()->GetGPUVirtualAddress();
+
+	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc;
+	cbvDesc.BufferLocation = cbAddress;
+	cbvDesc.SizeInBytes = objCBByteSize;
+	m_device->CreateConstantBufferView(&cbvDesc,m_srvHeap->GetCPUDescriptorHandleForHeapStart());
 }
 
 void RRenderer::ResizeBuffers(uint16_t width, uint16_t height)
