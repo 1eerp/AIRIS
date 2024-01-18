@@ -4,6 +4,7 @@
 #include "Core/Events/ApplicationEvents.hpp"
 #include "Core/Events/InputEvents.h"
 #include "Core/Input/Input.hpp"
+#include "Core/Time.hpp"
 #include <random>
 
 
@@ -36,15 +37,9 @@ RRenderer::~RRenderer()
 }
 
 void RRenderer::Update()
-{
-	// TODO: CREATE TIME CLASS AND REMOVE THIS
-	static std::chrono::steady_clock::time_point lastTime;
-	std::chrono::steady_clock::time_point curTime = std::chrono::high_resolution_clock::now();
-	float timeInSec = static_cast<float>(std::chrono::duration_cast<std::chrono::nanoseconds>(curTime - lastTime).count()) / 1e9;
-	lastTime = curTime;
-	
+{	
 	// Controller updates camera
-	m_controller.Update(timeInSec);
+	m_controller.Update(Time::Delta());
 	
 	Ref<Camera> cam = m_controller.GetCamera();
 	

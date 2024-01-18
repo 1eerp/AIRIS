@@ -5,7 +5,7 @@
 #include "Events/EventSystem.hpp"
 #include "Events/InputEvents.h"
 #include "Input/Input.hpp"
-#include "Core/Timer.hpp"
+#include "Time.hpp"
 
 
 SApp* SApp::s_appInstance;
@@ -62,12 +62,14 @@ bool SApp::OnKeyDown(IEvent* event)
 
 void SApp::Run()
 {
-	// Show the window now that the initialization is complete
+	// Show the window and reset static variables in Time class, now that the initialization is complete
 	m_mainWindow->Show();
+	Time::Reset();
 
 	// MAIN LOOP
 	while (m_running)
 	{
+		Time::Update();
 		Update();
 	}
 }
