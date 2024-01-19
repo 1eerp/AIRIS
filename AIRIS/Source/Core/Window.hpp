@@ -16,8 +16,8 @@ struct WindowProps
 	unsigned int		Width = 1280, 
 						Height = 720;
 
-	std::wstring		ClassName = L"SakuraMainWindowClass";
-	std::wstring		Title = L"Sakura";
+	std::wstring		ClassName = L"AIRISMainWindowClass";
+	std::wstring		Title = L"AIRIS";
 
 	WindowStartProps	StartProps;
 

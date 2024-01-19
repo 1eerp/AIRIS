@@ -60,7 +60,7 @@ EditorCC::EditorCC()
 
 EditorCC::EditorCC(Ref<Camera>& cam)
 {
-
+	m_camera = cam;
 }
 
 void EditorCC::Update(float deltaTime)
@@ -91,7 +91,6 @@ void EditorCC::Update(float deltaTime)
 			m_pitch += deltaMouse.y;
 
 			deltaMouse *= 2;
-			CORE_INFO("{}, {}", m_yaw, m_pitch);
 			if (glm::abs(m_yaw) > 180.f)
 			{
 				// YAW =		THIS				IF POSITIVE				THIS				IF NEGATIVE
