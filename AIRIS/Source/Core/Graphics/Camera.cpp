@@ -212,6 +212,12 @@ void Camera::UpdateShaderData()
 		m_gpuData.ProjMatrix = glm::perspective(m_camSpec.FOV, ar, m_camSpec.Near, m_camSpec.Far);
 
 	m_gpuData.ViewMatrix = glm::mat4_cast(m_transform.Orientation) * glm::translate(glm::mat4(1.0f), -m_transform.Position);
+	m_gpuData.ViewProjMatrix = m_gpuData.ProjMatrix * m_gpuData.ViewMatrix;
+
+	// INVERSES
+	m_gpuData.InvViewMatrix = glm::inverse(m_gpuData.ViewMatrix);
+	m_gpuData.InvProjMatrix = glm::inverse(m_gpuData.ProjMatrix);
+	m_gpuData.InvViewProjMatrix = glm::inverse(m_gpuData.ViewProjMatrix);
 
 	m_requiresUpdate = false;
 }

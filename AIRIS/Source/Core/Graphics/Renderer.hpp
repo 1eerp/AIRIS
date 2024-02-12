@@ -3,10 +3,12 @@
 #include "Core/Events/IEventListener.hpp"
 #include "Core/Window.hpp"
 #include "Core/API/RendererAPI.hpp"
+#include "FrameResource.hpp"
 #include "Mesh.hpp"
+#include "RenderItem.hpp"
 #include "CameraController.hpp"
 #include "RTHelper.hpp"
-#include "Vertex.hpp"
+#include "ShaderData.hpp"
 using Microsoft::WRL::ComPtr;
 
 
@@ -49,15 +51,25 @@ public:
 
 private:
 	virtual void Init() override;
+	void CreateFrameResources();
 	void CreateCommandObjects();
 	void CreateSwapChain();
 	void CreateDescriptorHeaps();
+	void CreateCBVDescriptorHeap();
 	void CreateObjects();
+	void CreateRenderItems();
 	void CreateShader();
 	void CreateRootSignatureAndPSOs();
-	void CreateConstantBuffers();
+	void CreateConstantBufferViews();
 	void ResizeBuffers(uint16_t width, uint16_t height);
+
+	void DrawRenderItems();
+
+	void UpdatePassConstants();
+	void UpdateConstantBuffers();
 	void FlushCommandQueue();
+	void FlushCurrentFRCommands();
+
 	ID3D12Resource* CurrentBackBuffer() const;
 	D3D12_CPU_DESCRIPTOR_HANDLE CurrentBackBufferView() const;
 	D3D12_CPU_DESCRIPTOR_HANDLE DepthStencilView() const;
@@ -73,19 +85,29 @@ private:
 	ComPtr<ID3D12Fence>						m_fence;
 	UINT64									m_fenceValue = 0;
 
+	// Command Interfaces
 	ComPtr<ID3D12CommandQueue>				m_cmdQueue;
 	ComPtr<ID3D12CommandAllocator>			m_cmdAlloc;
 	ComPtr<ID3D12GraphicsCommandList>		m_cmdList;
 
+	// Resources and Descriptors
 	uint8_t									m_curBackBuffer = 0;
 	std::vector<ComPtr<ID3D12Resource>>		m_swapChainBuffers = std::vector<ComPtr<ID3D12Resource>>(DEFAULT_SWAPCHAINBUFFERCOUNT);
 	ComPtr<ID3D12Resource>					m_depthStencilBuffer;
-	Ref<UploadBuffer<ConstantBuffer>>		m_constantBuffer;
 
+	// Constant Buffers
+	Ref<UploadBuffer<PassConstants>>		m_passConstantBuffer;
+
+	static const int						s_frameResourcesCount = 3;
+	std::vector<Scope<FrameResource>>		m_frameResources;
+	FrameResource*							m_curFrameResource = nullptr;
+	int										m_curFrameResourceIndex = 0;
+
+	// Descriptor Heaps
 	ComPtr<ID3D12DescriptorHeap>			m_rtvHeap,
 											m_dsvHeap,
-											m_srvHeap; // CBV
-
+											m_cbvHeap; // CBV
+	// Shader Bytecode
 	ComPtr<ID3DBlob>						m_vsByteCode = nullptr,
 											m_psByteCode = nullptr;
 
@@ -96,13 +118,22 @@ private:
 
 	D3D12_VIEWPORT							m_viewport;
 	D3D12_RECT								m_scissorRect;
-
-
-	uint16_t								m_clientWidth,
+	unsigned short							m_clientWidth,
 											m_clientHeight;
 
+	// Constant Buffer Data
+	PassConstants							m_mainPassConstants;
+
+	// Meshes
 	std::unique_ptr<Mesh>					m_mesh = nullptr;
-	ConstantBuffer							m_matricesBuffer;
+
+	// List of all the render items.
+	std::vector<Scope<RenderItem>>			m_renderItems;
+
+	// Render items divided by PSO.
+	std::vector<RenderItem*>				m_opaqueRItems;
+	std::vector<RenderItem*>				m_transparentRItems;
+
 	glm::vec3								m_meshPos = {0.f, 0.f, 0.f};
 
 	// EDITOR CAMERA CONTROLLER

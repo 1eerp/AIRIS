@@ -3,7 +3,7 @@
 #include "Util.hpp"
 #include "Core/API/RendererAPI.hpp"
 #include "Core/API/D3D12/Buffer.h"
-#include "Vertex.hpp"
+#include "ShaderData.hpp"
 
 
 struct SubMesh

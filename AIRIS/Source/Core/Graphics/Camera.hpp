@@ -79,6 +79,12 @@ struct GPUCameraMatrices
 {
 	glm::mat4 ViewMatrix;
 	glm::mat4 ProjMatrix;
+	glm::mat4 ViewProjMatrix;
+
+	// INVERSE MATRICES
+	glm::mat4 InvViewMatrix;
+	glm::mat4 InvProjMatrix;
+	glm::mat4 InvViewProjMatrix;
 };
 
 struct Transform
@@ -125,13 +131,16 @@ public:
 	inline const glm::vec3&	GetForwardDir() { return m_transform.Forward; }
 	inline const glm::vec3&	GetUpDir() { return m_transform.Up; }
 	inline const glm::vec3&	GetRightDir() { return m_transform.Right; }
-	inline float		GetFov() { return m_camSpec.FOV; }
-	inline float		GetAspectRatio() { return m_camSpec.AspectRatio; }
-	inline float		GetSize() { return m_camSpec.Size; }
-	inline bool			RequiresUpdate() { return m_requiresUpdate; }
+	inline float			GetFov() { return m_camSpec.FOV; }
+	inline float			GetAspectRatio() { return m_camSpec.AspectRatio; }
+	inline float			GetSize() { return m_camSpec.Size; }
+	inline float			GetNearZ() { return m_camSpec.Near; }
+	inline float			GetFarZ() { return m_camSpec.Far; }
+	inline bool				RequiresUpdate() { return m_requiresUpdate; }
 
 	inline const glm::mat4&	GetViewMatrix() { return m_gpuData.ViewMatrix; }
 	inline const glm::mat4&	GetProjMatrix() { return m_gpuData.ProjMatrix; }
+	inline const GPUCameraMatrices& GetGPUMatrices() { return m_gpuData; }
 
 	void UpdatePos(glm::vec3 deltaPos);
 	void UpdateFov(float deltaFov);
